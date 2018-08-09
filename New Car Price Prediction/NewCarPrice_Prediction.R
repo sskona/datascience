@@ -1,0 +1,721 @@
+# Business Objectives
+# -------------------
+# Linear Regression Model development for Chinese automobile company Geely Auto
+
+# Find factors affecting the pricing of cars in the American marketing
+# 1. Which variables are significant in predicting the price of a car
+# 2. How well those variables describe the price of a car
+
+# Goals 
+# -----
+# 1. Model the price of cars with the available independent variables.
+# 2. Should management in understanding how exactly the prices vary with various independent variables.
+#    2.1 manipulate the design of the cars
+#    2.2 the business strategy etc. to meet certain price levels
+# 
+# 
+# Load libraries
+#---------------
+
+library(ggplot2)
+library(lubridate)
+library(stringr)
+library(MASS)
+#library(caret)
+library(car)
+library(lmtest)
+library(dplyr)
+
+
+# Load Data
+    cars_prices_original <- read.csv("CarPrice_Assignment.csv")
+    View(cars_prices_original)
+
+# the structure of the dataset
+    str(cars_prices_original)
+
+# Remove duplicate rows, if any
+    # 205 Rows exist in original dataset
+    nrow(cars_prices_original)
+    cars_prices_original <- unique(cars_prices_original)
+    # No duplicate rows, 205 Rows exist
+    nrow(cars_prices_original)
+
+# Data Preparation
+
+    # Checking for NA values and dataset doesn't have any NA values
+    sum (sapply(cars_prices_original, is.na)) # This returns 0 as total count of NA values
+
+    cars_prices <-  cars_prices_original 
+    
+    # Extract car company name from CarName (which has two parts 'car company' and 'car model')
+    cars_prices$car_company_name <- factor (str_split_fixed(cars_prices$CarName, pattern = " ", n = 2) [,1])
+
+    # Verify if the split is correct against parent column 'CarName'
+    View(select(cars_prices, CarName, car_company_name))
+        
+    # Remove 'CarName'
+    cars_prices <-  cars_prices [, -which(names(cars_prices) == "CarName")]
+    
+# Data Cleaning 
+    
+    # Cleaning values - Car company names
+        # Before cleaning
+        summary(cars_prices$car_company_name)
+        
+        #Convert to character vector
+        cars_prices$car_company_name <- as.character(cars_prices$car_company_name)
+        
+        #  'vokswagen' and 'vw as 'volkswagen'
+        cars_prices[which (cars_prices$car_company_name == 'vokswagen'),"car_company_name"] <- "volkswagen"
+        cars_prices[which (cars_prices$car_company_name == 'vw'),"car_company_name"] <- "volkswagen"
+        #  'toyouta' as 'toyota'
+        cars_prices[which (cars_prices$car_company_name == 'toyouta'),"car_company_name"] <- "toyota"
+        # 'maxda' as 'mazda'
+        cars_prices[which (cars_prices$car_company_name == 'maxda'),"car_company_name"] <- "mazda"
+        # 'Nissan' as 'nissan'
+        cars_prices[which (cars_prices$car_company_name == 'Nissan'),"car_company_name"] <- "nissan"
+        # 'porcshce' as 'porsche'
+        cars_prices[which (cars_prices$car_company_name == 'porsche'),"car_company_name"] <- "porsche"
+        cars_prices[which (cars_prices$car_company_name == 'porcshce'),"car_company_name"] <- "porsche"
+        
+        cars_prices$car_company_name <- as.factor(cars_prices$car_company_name)
+        
+        # After cleaning
+        summary(factor(cars_prices$car_company_name))
+        
+    # Checking for enginetype values - dohc dohcv l ohc, ohcf, ohcv,rotor 
+    # No data cleaning needed
+        summary(cars_prices$enginetype)
+        # dohcv - shown as valid engine type in various documents describe for following description
+        # Double Over Head Value and Cam Shaft - So, not removing and treating as valid
+        
+    # Checking Zero and Near Zero variation among categorical variables
+        
+        # Checking Engine Location
+        summary(cars_prices$enginelocation)
+    
+        # enginelocation = 'rear', only 3 observations which contribute to only 1.5% approximately & 98.5% of cars are with engine location = 'front'
+        # Removing variable and also 3 rows, as the variables/characteristcs of these type of cars are not useful for analysis and modeling.
+        # Also, in EDA it is observed that these 3 cars have high prices which fall into Outliers
+        # Using this variable may give wrong prediction for pricing
+        cars_prices <- filter(cars_prices, enginelocation == 'front')
+        
+        # Removing variable 'enginelocation'
+        cars_prices <-  cars_prices [, -which(names(cars_prices) == "enginelocation")]
+        
+        
+# Converting Categorical variables to Numeric
+    
+    # Replace levels with 1 and 0 for all variables which are binary in nature i.e. only two values
+    
+    # 1. symboling - doesn't need any change as it is already numeric with both +ve and -values.
+    #                And indepdent variable can have -ve values.
+    
+    # 2. fuel type - diesel and gas
+    levels(cars_prices$fueltype) <- c(1,0)
+    cars_prices$fueltype<- as.numeric(levels(cars_prices$fueltype))[cars_prices$fueltype]
+
+    # 3. aspiration - 'std' and 'turbo'
+    levels(cars_prices$aspiration) <- c(1,0)
+    cars_prices$aspiration<- as.numeric(levels(cars_prices$aspiration))[cars_prices$aspiration]
+    
+    # 4. doornumber - 'two' and 'four'
+    levels(cars_prices$doornumber) <- c(1,0)
+    cars_prices$doornumber <- as.numeric(levels(cars_prices$doornumber))[cars_prices$doornumber]
+
+    # 5. Convert 'cylindernumber' to numeric values
+    levels(cars_prices$cylindernumber) <- c(8, 5, 4, 6, 3, 12, 2)
+    cars_prices$cylindernumber <- as.numeric(as.character(cars_prices$cylindernumber))
+    
+
+# Univariate Analysis
+    
+    # Prices - Outliers exist - car prices >29000 seems to be Outliers
+    boxplot(cars_prices$price)
+    hist(cars_prices$price)
+    summary(cars_prices$price)
+    
+    # enginesize - Outliers exist sizes > 220 seems to be the Outlier
+    boxplot(cars_prices$enginesize)
+    hist(cars_prices$enginesize)
+    summary(cars_prices$enginesize)
+    
+    # cylindernumber
+    summary(cars_prices$cylindernumber)
+    
+    # curbweight
+    summary(cars_prices$curbweight)
+    
+    # carlength
+    summary(cars_prices$carlength)
+    
+    
+# Bi-Variate Analysis - Outliers Vs Influencers
+    
+    # Engine Size vs Price    
+    plot(cars_prices$enginesize, cars_prices$price, xlim=c(min(cars_prices$enginesize)-5, max(cars_prices$enginesize)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_prices$price ~ cars_prices$enginesize), lwd=2)
+    
+    # There seems to be no major effect of regression line slop based on Outliers in Engine Size
+    # Outliers in Engine Size are not an influencers
+    cars_enginesize_filtered <- filter(cars_prices, enginesize <= 220)
+    plot(cars_enginesize_filtered$enginesize, cars_enginesize_filtered$price, xlim=c(min(cars_prices$enginesize)-5, max(cars_prices$enginesize)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_enginesize_filtered$price ~ cars_enginesize_filtered$enginesize), lwd=2)
+    
+    # cylindernumber Vs Price
+    plot(cars_prices$cylindernumber, cars_prices$price, xlim=c(min(cars_prices$cylindernumber)-5, max(cars_prices$cylindernumber)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_prices$price ~ cars_prices$cylindernumber), lwd=2)
+    
+    # There seems to be no major effect of regression line slop based on Outliers in cylindernumber
+    # Outliers in cylindernumber are not an influencers
+    cars_enginesize_filtered <- filter(cars_prices, cylindernumber < 12)
+    plot(cars_enginesize_filtered$cylindernumber, cars_enginesize_filtered$price, xlim=c(min(cars_prices$cylindernumber)-5, max(cars_prices$cylindernumber)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_enginesize_filtered$price ~ cars_enginesize_filtered$cylindernumber), lwd=2)
+    
+    # curbweight
+    plot(cars_prices$curbweight, cars_prices$price, xlim=c(min(cars_prices$curbweight)-5, max(cars_prices$curbweight)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_prices$price ~ cars_prices$curbweight), lwd=2)
+    
+    # There seems to be no major effect of regression line slop based on Outliers in curbweight
+    # Outliers in curbweight are not an influencers
+    cars_curbweight_filtered <- filter(cars_prices, curbweight < 3600)
+    plot(cars_enginesize_filtered$curbweight, cars_enginesize_filtered$price, xlim=c(min(cars_prices$curbweight)-5, max(cars_prices$curbweight)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_enginesize_filtered$price ~ cars_enginesize_filtered$curbweight), lwd=2)
+    
+    
+    # carlength
+    plot(cars_prices$carlength, cars_prices$price, xlim=c(min(cars_prices$carlength)-5, max(cars_prices$carlength)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_prices$price ~ cars_prices$carlength), lwd=2)
+    
+    # There seems to be no major effect of regression line slop based on Outliers in curbweight
+    # Outliers in curbweight are not an influencers
+    cars_carlength_filtered <- filter(cars_prices, carlength < 195)
+    plot(cars_enginesize_filtered$carlength, cars_enginesize_filtered$price, xlim=c(min(cars_prices$carlength)-5, max(cars_prices$carlength)+5), ylim=c(min(cars_prices$price)-10, max(cars_prices$price)+10))
+    abline(lm (cars_enginesize_filtered$price ~ cars_enginesize_filtered$carlength), lwd=2)
+    
+# correlation matrix on all numerical variables against Price analysis
+    
+    cars_prices_measurements <- cars_prices[, sapply(cars_prices, is.numeric)]
+    View(cor(cars_prices_measurements [, -1]))
+    # citympg, highwaympg - are highly negatively correlated
+    # peakrpm, symoling and aspiration negatively correlated
+    # enginesize, cylindernumber, horse power, wheelbase, carlength, curbweight - are highly correlated
+
+# Derived Variables
+    
+    # Computing Company segmentation 
+    
+    cars_company_mean_prices <- aggregate(list(price = cars_prices$price), by = list(car_company_name = cars_prices$car_company_name), FUN = mean)
+    
+    cars_company_median_prices <- aggregate(list(price = cars_prices$price), by = list(car_company_name = cars_prices$car_company_name), FUN = median)
+    
+    # Cross verification of mean and median prices per company
+    cars_company_mean_prices
+    cars_company_median_prices
+    
+    # Use following merge method as well to study, if needed
+    # merge(cars_company_mean_prices, cars_company_median_prices, by = "car_company_name", all.x = TRUE)
+    
+    # Using mean price for calculating segment each company belongs to
+    # Ref Link - https://en.wikipedia.org/wiki/Car_classification
+    # Used for basic segmentation    
+    cars_company_mean_prices$car_segment <- ifelse(cars_company_mean_prices$price >= 20000, 
+                                                   'Luxury', 
+                                                    ifelse(cars_company_mean_prices$price >= 15000, 
+                                                            "Midlevel",
+                                                            ifelse(cars_company_mean_prices$price >= 9000, 
+                                                                   "Economy",
+                                                                    "Budget"
+                                            )
+                                     )
+                                )
+    
+    # Creating dataframe with company & segment 
+    cars_company_segments <- cars_company_mean_prices[, c(1,3)]
+    
+    # Merge car segment information to main dataset
+    cars_prices <- merge(x = cars_prices, y = cars_company_segments, by = "car_company_name")
+    
+    # Removing company name
+    cars_prices <- cars_prices [, -which(names(cars_prices) == "car_company_name")]
+    
+    # Dummy Variables creation for all nominal variables
+    
+    # 1. car_segment
+
+        dummy_car_segment <- data.frame(model.matrix( ~car_segment, data = cars_prices))
+        View(dummy_car_segment)
+        dummy_car_segment <- dummy_car_segment[,-1]
+    
+    # Combine the dummy variables for car_company_name and adding as numeric columns to cars_prices_numeric dataset
+    cars_prices_numeric <- cbind(cars_prices[,-which(names(cars_prices) == 'car_segment')], dummy_car_segment)
+    
+        
+    # 2. carbody
+
+        dummy_carbody <- data.frame(model.matrix( ~carbody, data = cars_prices_numeric))
+        View(dummy_carbody)
+        dummy_carbody <- dummy_carbody[,-1]
+    
+    # Combine the dummy variables for carbody and adding as numeric columns to cars_prices_numeric dataset
+    cars_prices_numeric <- cbind(cars_prices_numeric[,-which(names(cars_prices_numeric) == 'carbody')], dummy_carbody)
+    
+        
+    # 3. drivewheel
+
+        dummy_drivewheel <- data.frame(model.matrix( ~drivewheel, data = cars_prices_numeric))
+        View(dummy_drivewheel)
+        dummy_drivewheel <- dummy_drivewheel[,-1]
+    
+    # Combine the dummy variables for drivewheel and adding as numeric columns to cars_prices_numeric dataset
+    cars_prices_numeric <- cbind(cars_prices_numeric
+                                                      [,
+                                                        -which(names(cars_prices_numeric) == 'drivewheel')
+                                                      ], 
+                                 dummy_drivewheel)    
+        
+    # 4. enginetype
+
+        dummy_enginetype <- data.frame(model.matrix( ~enginetype, data = cars_prices_numeric))
+        View(dummy_enginetype)
+        dummy_enginetype <- dummy_enginetype[,-1]
+    
+    # Combine the dummy variables for enginetype and adding as numeric columns to cars_prices_numeric dataset
+    cars_prices_numeric <- cbind(cars_prices_numeric[,-which(names(cars_prices_numeric) == 'enginetype')], dummy_enginetype)    
+        
+    # 5. fuelsystem
+        dummy_fuelsystem <- data.frame(model.matrix( ~fuelsystem, data = cars_prices_numeric))
+        View(dummy_fuelsystem)
+        dummy_fuelsystem <- dummy_fuelsystem[,-1]
+    
+    # Combine the dummy variables for fuelsystem and adding as numeric columns to cars_prices_numeric dataset
+    cars_prices_numeric <- cbind(cars_prices_numeric[,-which(names(cars_prices_numeric) == 'fuelsystem')], dummy_fuelsystem)  
+    
+    
+    
+# Linear Regression Model Building
+    
+    
+# Create training and test datasets in 70:30 ratio
+set.seed(100)
+training_indices= sample(1:nrow(cars_prices_numeric), 0.7*nrow(cars_prices_numeric))
+cars_prices_train = cars_prices_numeric[training_indices,]
+cars_prices_test = cars_prices_numeric[-training_indices,]
+    
+    
+    # Create first model with all variables and exclude car_ID
+    cars_prices_model_1 <-lm(price~.,data=cars_prices_train [, -c(which(names(cars_prices_train) == 'car_ID'))])
+    summary(cars_prices_model_1)
+    
+    
+    # Use stepAIC function and reduce the variables     
+    step <- stepAIC(cars_prices_model_1, direction="both")    
+    
+    step
+    
+
+    
+    cars_prices_model_2 <- lm(formula = price ~ fueltype + aspiration + carlength + curbweight + 
+                                cylindernumber + compressionratio + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor + 
+                                fuelsystemspdi, data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_2)
+    # Residual standard error: 1758 on 119 degrees of freedom
+    # Multiple R-squared:  0.9445,	Adjusted R-squared:  0.9347 
+    # F-statistic:  96.5 on 21 and 119 DF,  p-value: < 2.2e-16
+    
+    sort(vif(cars_prices_model_2), decreasing = TRUE)
+    
+    # fueltype VIF = 116.258296, p-value = 0.002550, compressionratio VIF = 108.363514, p-value = 0.005123
+    cor(cars_prices_train$fueltype, cars_prices_train$compressionratio)
+    #  0.9817142
+    
+    # Removing compressionratio
+
+    cars_prices_model_3 <- lm(formula = price ~ fueltype + aspiration + carlength + curbweight + 
+                                cylindernumber + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor + 
+                                fuelsystemspdi, data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_3)
+    # Residual standard error: 1809 on 120 degrees of freedom
+    # Multiple R-squared:  0.9407,	Adjusted R-squared:  0.9309 
+    # F-statistic: 95.25 on 20 and 120 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that compressionratio is not significant
+    sort(vif(cars_prices_model_3), decreasing = TRUE)
+    
+    
+    # All these significant w.r.t p-values
+    # carbodysedan    carbodyhatchback          curbweight        carbodywagon          horsepower
+
+    # Removing carlength
+    
+    cars_prices_model_4 <- lm(formula = price ~ fueltype + aspiration + curbweight + 
+                                cylindernumber + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor + 
+                                fuelsystemspdi, data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_4)
+    # Residual standard error: 1815 on 121 degrees of freedom
+    # Multiple R-squared:  0.9399,	Adjusted R-squared:  0.9304 
+    # F-statistic: 99.52 on 19 and 121 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that carlength is not significant
+    sort(vif(cars_prices_model_4), decreasing = TRUE)
+    
+    
+    # Removing aspiration
+    
+    cars_prices_model_5 <- lm(formula = price ~ fueltype +  curbweight + 
+                                cylindernumber + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor + 
+                                fuelsystemspdi, data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_5)
+    # Residual standard error: 1819 on 122 degrees of freedom
+    # Multiple R-squared:  0.9391,	Adjusted R-squared:  0.9301 
+    # F-statistic: 104.5 on 18 and 122 DF,  p-value: < 2.2e-16
+
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that aspiration is not significant
+    sort(vif(cars_prices_model_4), decreasing = TRUE)
+    
+    
+    # Removing 'fueltype'
+
+    cars_prices_model_6 <- lm(formula = price ~  curbweight + 
+                                cylindernumber + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor + 
+                                fuelsystemspdi, data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_6)
+    # Residual standard error: 1827 on 123 degrees of freedom
+    # Multiple R-squared:  0.938,	Adjusted R-squared:  0.9295 
+    # F-statistic: 109.5 on 17 and 123 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that fueltype is not significant
+    sort(vif(cars_prices_model_6), decreasing = TRUE)
+    
+    
+    # Removing 'fuelsystemspdi' as p-value = 0.209833
+    
+    cars_prices_model_7 <- lm(formula = price ~  curbweight + 
+                                cylindernumber + horsepower + peakrpm + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor,
+                                data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                                      "car_ID"))])
+    
+    summary(cars_prices_model_7)
+    # Residual standard error: 1831 on 124 degrees of freedom
+    # Multiple R-squared:  0.9372,	Adjusted R-squared:  0.9291 
+    # F-statistic: 115.7 on 16 and 124 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that fuelsystemspdi is not significant
+    sort(vif(cars_prices_model_7), decreasing = TRUE)
+    
+    
+    
+    # Removing 'peakrpm' as p-value = 0.155338
+    
+    cars_prices_model_8 <- lm(formula = price ~  curbweight + 
+                                cylindernumber + horsepower + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetypeohcv + enginetyperotor,
+                              data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                    "car_ID"))])
+    
+    summary(cars_prices_model_8)
+    # Residual standard error: 1839 on 125 degrees of freedom
+    # Multiple R-squared:  0.9362,	Adjusted R-squared:  0.9285 
+    # F-statistic: 122.3 on 15 and 125 DF,  p-value: < 2.2e-16
+    
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that peakrpm is not significant
+    sort(vif(cars_prices_model_8), decreasing = TRUE)
+    
+    
+    # Removing 'enginetypeohcv' as p-value = 0.056944
+    cars_prices_model_9 <- lm(formula = price ~  curbweight + 
+                                cylindernumber + horsepower + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodysedan + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetyperotor,
+                              data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                    "car_ID"))])
+    
+    summary(cars_prices_model_9)
+    # Residual standard error: 1859 on 126 degrees of freedom
+    # Multiple R-squared:  0.9343,	Adjusted R-squared:  0.927 
+    # F-statistic:   128 on 14 and 126 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that enginetypeohcv is not significant
+    sort(vif(cars_prices_model_9), decreasing = TRUE)
+    
+    
+    # Removing 'carbodysedan' based high VIF = 21.425892
+    cars_prices_model_10 <- lm(formula = price ~  curbweight + 
+                                cylindernumber + horsepower + 
+                                highwaympg + car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                carbodyhatchback + carbodywagon + enginetypedohcv + 
+                                enginetypeohc + enginetypeohcf + enginetyperotor,
+                              data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                    "car_ID"))])
+    
+    summary(cars_prices_model_10)
+    # Residual standard error: 1886 on 127 degrees of freedom
+    # Multiple R-squared:  0.9318,	Adjusted R-squared:  0.9249 
+    # F-statistic: 133.6 on 13 and 127 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that enginetypeohcv is not significant
+    sort(vif(cars_prices_model_10), decreasing = TRUE)
+    
+    
+    # Removing 'highwaympg' based high VIF = 5.285664
+    cars_prices_model_11 <- lm(formula = price ~  curbweight + 
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                 carbodyhatchback + carbodywagon + enginetypedohcv + 
+                                 enginetypeohc + enginetypeohcf + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_11)
+    # Residual standard error: 1913 on 128 degrees of freedom
+    # Multiple R-squared:  0.9293,	Adjusted R-squared:  0.9227 
+    # F-statistic: 140.2 on 12 and 128 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that highwaympg is not significant
+    sort(vif(cars_prices_model_11), decreasing = TRUE)
+    
+    
+    # Removing enginetypeohcf with p-value = 0.06
+    cars_prices_model_12 <- lm(formula = price ~  curbweight + 
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                 carbodyhatchback + carbodywagon + enginetypedohcv + 
+                                 enginetypeohc + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_12)
+    # Residual standard error: 1931 on 129 degrees of freedom
+    # Multiple R-squared:  0.9274,	Adjusted R-squared:  0.9212 
+    # F-statistic: 149.9 on 11 and 129 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that enginetypeohcf is not significant
+    sort(vif(cars_prices_model_12), decreasing = TRUE)
+    
+    
+    # Removing 'carbodyhatchback' with p-value = 0.053044
+    cars_prices_model_13 <- lm(formula = price ~  curbweight + 
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel + carbodyhardtop + 
+                                 carbodywagon + enginetypedohcv + 
+                                 enginetypeohc + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_13)
+    # Residual standard error: 1952 on 130 degrees of freedom
+    # Multiple R-squared:  0.9253,	Adjusted R-squared:  0.9195 
+    # F-statistic:   161 on 10 and 130 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that carbodyhatchback is not significant
+    sort(vif(cars_prices_model_13), decreasing = TRUE)
+    
+    
+    
+    # Removing 'carbodyhardtop' with p-value = 0.083553
+    cars_prices_model_14 <- lm(formula = price ~  curbweight + 
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel +  
+                                 carbodywagon + enginetypedohcv + 
+                                 enginetypeohc + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_14)
+    # Residual standard error: 1967 on 131 degrees of freedom
+    # Multiple R-squared:  0.9235,	Adjusted R-squared:  0.9183 
+    # F-statistic: 175.8 on 9 and 131 DF,  p-value: < 2.2e-16
+    
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that carbodyhatchback is not significant
+    sort(vif(cars_prices_model_14), decreasing = TRUE)
+    
+    # VIF 
+    cor(cars_prices_train$curbweight, cars_prices_train$horsepower)
+    
+    
+    # Removing curbweight with a reason of VIF = 4.611026 and due to high correlation with hosrpower cause drastic reduction in R-sqaured & Adjust R-squared
+    # Removing 'carbodywagon' with p-value = 0.03588
+    
+    cars_prices_model_15 <- lm(formula = price ~ curbweight +   
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel +  
+                                 enginetypedohcv + 
+                                 enginetypeohc + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_15)
+    # Residual standard error: 1993 on 132 degrees of freedom
+    # Multiple R-squared:  0.9209,	Adjusted R-squared:  0.9161 
+    # F-statistic: 192.2 on 8 and 132 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that carbodywagon is not significant
+    sort(vif(cars_prices_model_15), decreasing = TRUE)
+    
+    # Removing 'enginetypedohcv' as it is less significant compared to other variables with p-value = 0.01453
+    
+    cars_prices_model_16 <- lm(formula = price ~ curbweight +   
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel +  
+                                  
+                                 enginetypeohc + enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_16)
+    # Residual standard error: 2031 on 133 degrees of freedom
+    # Multiple R-squared:  0.9172,	Adjusted R-squared:  0.9129 
+    # F-statistic: 210.6 on 7 and 133 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that enginetypedohcv is not significant
+    sort(vif(cars_prices_model_16), decreasing = TRUE)
+    
+    
+    # Removing 'enginetypeohc' less significance compared to others with p-value
+    
+    cars_prices_model_17 <- lm(formula = price ~ curbweight +   
+                                 cylindernumber + horsepower + 
+                                 car_segmentLuxury + car_segmentMidlevel +  
+                                 
+                                 enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_17)
+    # Residual standard error: 2080 on 134 degrees of freedom
+    # Mltiple R-squared:  0.9125,	Adjusted R-squared:  0.9086 
+    # F-statistic:   233 on 6 and 134 DF,  p-value: < 2.2e-16
+
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that enginetypeohc is not significant
+    sort(vif(cars_prices_model_17), decreasing = TRUE)
+    
+    
+    # Checking correlation between cylindernumber and horsepower
+    # VIFs - horsepower = 2.890481          cylindernumber = 2.515119 
+    # p-values - cylindernumber = 0.002106, horsepower = 0.001227
+    cor(cars_prices_train$cylindernumber, cars_prices_train$horsepower)
+
+    # Removing 'horsepower' as it is correlated with cylindernumber
+    cars_prices_model_18 <- lm(formula = price ~ curbweight +   
+                                 cylindernumber + 
+                                 car_segmentLuxury + car_segmentMidlevel +  
+                                 
+                                 enginetyperotor,
+                               data = cars_prices_train[, -c(which(names(cars_prices_train) == 
+                                                                     "car_ID"))])
+    
+    summary(cars_prices_model_18)
+    # Residual standard error: 2155 on 135 degrees of freedom
+    # Multiple R-squared:  0.9054,	Adjusted R-squared:  0.9019 
+    # F-statistic: 258.4 on 5 and 135 DF,  p-value: < 2.2e-16
+    
+    # R-squared and Adjusted R-squared haven't changed significantly, and conforms that horsepower is not significant
+    sort(vif(cars_prices_model_18), decreasing = TRUE)
+    
+    
+    
+    # Other Models
+    
+    # Mltiple R-squared:  0.9125,	Adjusted R-squared:  0.9086 
+    
+    cars_prices_model_17 # For studying 'horsepower'
+    cars_prices_model_18 #
+    
+    
+    # Predict the car prices in the testing dataset
+    Predict_car_prices1 <- predict(cars_prices_model_18, cars_prices_test[, -which(names(cars_prices_test) == "price") ])
+    cars_prices_test$estimated_price <- Predict_car_prices1
+    
+    # Accuracy of the predictions
+    # Calculate correlation
+    r <- cor(cars_prices_test$price,cars_prices_test$estimated_price)
+    # calculate R squared by squaring correlation
+    rsquared <- r^2
+    
+    # check R-squared
+    rsquared
+    # 0.9054575
+    
+
+    # Estimated Vs Actual prices plot
+    
+    cars_prices_estimation <- select(cars_prices_test, car_ID, price, estimated_price)
+    View(cars_prices_estimation)
+    
+    # Error Term
+    
+    cars_prices_estimation$prediction_error <- cars_prices_estimation$price - cars_prices_estimation$estimated_price
+    
+    # Plots shows that errors are distributed randomly
+    #plot(cars_prices_estimation$car_ID, cars_prices_estimation$prediction_error)
+
+    ggplot(cars_prices_estimation,
+           aes(x = car_ID, y = prediction_error))+
+      geom_point(alpha=0.1, size=3) + 
+      labs(x="Car ID",y="Prediction Error")+
+      ggtitle("Car Prices Prediction Error Term")
+
+    ggplot(cars_prices_estimation,
+           aes(x = car_ID, y = prediction_error))+
+      geom_bar (stat = "Identity") + 
+      labs(x="Car ID",y="Prediction Error")+
+      ggtitle("Car Prices Prediction Error Term")
+    
+          
+# Final model equation
+    # All Beta coefficients are +ve, which is positive sign from Business Point of view.
+    #
+    # car_price_estimation =          -1.133e+04 + 
+    #                                  6.228e+00 * curbweight + 
+    #                                  1.495e+03 * cylindernumber + 
+    #                                  1.149e+04 * car_segmentLuxury + 
+    #                                  3.180e+03 * car_segmentMidlevel + 
+    #                                  7.775e+03 * enginetyperotor
+    # 
+    
+# Model Summary
+# ---------------
+    #  Following are suggested varables for 'Geely Auto' to consider to target their vehciles configurations and the corresponding Pricing
+    #
+    # Targetted Segments (car_segmentMidlevel and car_segmentMidlevel) 
+    #   - Car segments like Luxury and Mid level cars significant for targeting higher priced cars
+    #
+    # Following significant features for configuring more powered vehicles
+    #   - Curb Weight
+    #   - Engine Type
+    #   - Cylinders
+    
