@@ -1,0 +1,1935 @@
+---
+title: "Acquisition Analytics for CreditCard Customers"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+
+```
+
+### Problem Statement
+
+A leading credit card provider CredX receives thousands of applicants every year and, experiencing increased 
+credit loss over the last few years. The CEO wants to mitigate the credit risk.
+
+
+
+### Analytical Problem Solving Approach using CRISP-DM framework                                                                                                                                                             
+                                                                                                                                                                                                    
+     1. Business Objective(s)    
+
+      1.1 Business Understanding
+      CredX intends to mitigate their credit risk during acquisition by 'Finding The Right Customers'.
+            
+      1.2 Goals of Data Analysis
+        1.2.1. Using past data of the bank's applicants identify the most important factors affecting credit risk
+        1.2.2. Create strategies to mitigate the acquisition risk for new applications, by identifying right 
+               customers using predictive modelling to differentiate Good Vs Bad customer
+ 
+     2. Data Understanding
+        3.1 Demographic Data
+            Contains customer-level information like Age, Gender, Marital Status and Salary etc.
+        3.2 Credit Bureau Data
+            This is taken from the credit bureau, contains past Avg Credit Card Utilization, Outstanding balance 
+            and 30/60/90 DPDs in last 6/12 months etc.
+
+     3. Data Preparation
+        3.1 Data Cleaning
+        3.2 Data Imputation
+        3.3 Feature Engineering
+            3.3.1 Derived Variables
+            3.3.1 Encoding / Dummy variables
+            3.3.1 Weight-of-Evidence (WoE)/Information Value (IV) computation
+
+     4. Exploratory Data Analysis
+        4.1 Univariate Analysis
+        4.2 Bi-variate 
+        4.3 Multi-variate Analysis
+
+     5. Feature selection
+        We will use Use Weight-of-Evidence(WoE) /Information Value(IV) for feature selection
+
+     4. Modeling Building       
+           This is a binary classification problem with highly unbalanced data. We will apply following combination
+        of model types, sampling techniques & cross-validation
+
+        4.1 Demographic Data                 - Unbalanced Data  - Logistic Regression 
+        4.2 Demographic & Credit Bureau Data - Unbalanced Data  - Logistic Regression
+        4.3 Demographic & Credit Bureau Data - Under Sampling   - Logistic Regression - with Cross Validation
+        4.4 Demographic & Credit Bureau Data - Over  Sampling   - Logistic Regression - with Cross Validation 
+        4.5 Demographic & Credit Bureau Data - SMOTE Sampling   - Logistic Regression - with Cross Validation
+        4.6 Demographic & Credit Bureau Data - SMOTE Sampling   - Decision Trees      - with Cross Validation
+        4.7 Demographic & Credit Bureau Data - SMOTE Sampling   - Random Forest       - with Cross Validation
+
+     5. Models Evaluation using Metrics & Final Model Selection                                                                                                                                                                   
+        5.1 Accuracy, Sensitivity & Specificity
+        5.2 F-Score (F1)
+        5.3 Area Under Curve (AUC)
+        5.4 KSStatistic
+        5.5 ROC Curve
+        5.6 Vintage Curve
+
+     6. Model Deployment                                                                                                                                                                            
+     7. Application scorecard Building                                                                                                                                                              
+     8. Calculate scores on Rejected Population Data                                                                                                                                                                   
+     9. Financial Benefit Analysis                                                                                                                         
+
+## Loading Libraries and Common Functions
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Loading Libraries
+library(ggplot2)
+library(dplyr)
+library(outliers)
+library(corrplot)
+library(MASS)
+library(caret)
+library(ROSE)
+library(car)
+library(reshape2)
+library(scales)
+library(tidyr)
+library(ROCR)
+library(tibble)
+
+# Common Functions
+# For calculating Mode value of Categorical variables
+ModeFunc <- function(x) {
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]
+}
+
+# Function to determine the outliers in a measure
+checkForOutliersDetection <- function(dt, var) {
+  var_name <- eval(substitute(var),eval(dt))
+  na1 <- sum(is.na(var_name))
+  m1 <- mean(var_name, na.rm = T)
+  outlier <- boxplot.stats(var_name)$out
+  mo <- mean(outlier)
+  var_name <- ifelse(var_name %in% outlier, NA, var_name)
+  na2 <- sum(is.na(var_name))
+  cat("Outliers identified:", na2 - na1, "n")
+}
+
+# For plotting correlation matrix
+plot_correlationMatrix <- function (data, features) {
+  
+  melted_cor_matrix <- melt(round(cor(data [ names(data) 
+                                             %in% 
+                                               features],
+                                      use="complete.obs"),2))
+  
+  ggplot(data = melted_cor_matrix, aes(x=Var1, y=Var2, fill=value, label=value)) +  
+    geom_tile()    + 
+    geom_text()  + 
+    xlab('')   + 
+    ylab('') + 
+    theme_minimal() + 
+    theme(axis.text.x = element_text(size=10, 
+                                     hjust=-0.08, 
+                                     angle= -35 ))
+}
+```
+## Loading Data
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+
+# Loading Demographic Data
+demographic_data.original <-read.csv("Demographic data.csv",
+                            header = TRUE,
+                            stringsAsFactors = FALSE)
+
+# Loading Credit Bureau Data
+creditbureau_data.original <- read.csv("Credit Bureau data.csv",
+                        header = TRUE,
+                        stringsAsFactors = FALSE)
+
+#  Data Cleaning 
+#    1. Remove Duplicate Records
+#    2. Separate Rejected Applications from Data Analysis & Model Building
+#    3. Remove Invalid / Incorrect Values Records
+#    4. Missing Values Treatment 
+#    5. Outlier Treatment
+
+#  checking for Total row count
+# 71295
+nrow(demographic_data.original)
+
+# 71295
+nrow(creditbureau_data.original)
+
+```
+
+## Remove Duplicate Records
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+#  Checking for Duplicate records 
+# 71292 - 3 Duplicate records exist
+length(unique(demographic_data.original$Application.ID))
+
+# 71292 - 3 Duplicate records exist
+length(unique(creditbureau_data.original$Application.ID))
+
+
+#  Remove duplicate records
+demographic_data <- demographic_data.original[!duplicated(demographic_data.original$Application.ID),]
+creditbureau_data <- creditbureau_data.original[!duplicated(creditbureau_data.original$Application.ID),]
+
+summary(demographic_data)
+summary(creditbureau_data)
+
+# Checking NA Values
+sapply(demographic_data, function(x) sum(is.na(x) | is.null(x)))
+
+sapply(creditbureau_data, function(x) sum(is.na(x) | is.null(x)))
+
+# Making the Performance Tag as a factor variable as new feature
+demographic_data$Performance <- as.factor(demographic_data$Performance.Tag)
+
+# Validate Performance Tag across Application IDs in both data-sets
+# [1] Application.ID  Performance.Tag
+# <0 rows> (or 0-length row.names)
+setdiff(dplyr::select(demographic_data, Application.ID, Performance.Tag),dplyr::select(creditbureau_data, Application.ID, Performance.Tag))
+
+customer_master_data <- merge(demographic_data, creditbureau_data, by="Application.ID")
+View(customer_master_data)
+
+# Remove Performance.Tag.x and Performance.Tag.y
+customer_master_data <- customer_master_data[,-12]
+customer_master_data <- customer_master_data[,-30]
+```
+
+## Remove Rejected Applications Records 
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Check distribution of Classes and also NA values
+#    0     1  NA's 
+#66920  2947  1425 
+summary(customer_master_data$Performance)
+
+# Also classes (1 and 0) distribution, is highly unbalanced
+# [1] 1.9992
+((1425/71276)*100)
+
+
+# The records with Performance = NA are treated as Applications rejected. 
+# There are approximately 2% and we are ignoring them in the modeling.
+# Separating 1425 records Performance = NA
+rejected_records <- customer_master_data[which(is.na(customer_master_data$Performance)),]
+
+# [1] 1425
+nrow(rejected_records)
+
+
+# Retaining records that have Performance = 1 or 0
+customer_master_data <- customer_master_data[-which(is.na(customer_master_data$Performance)),]
+
+# Data Quality Checks for Rejected Population
+# [1] 69867
+length(customer_master_data$Performance)
+
+# [1] 1425
+length(rejected_records$Application.ID)
+# [1] 1425
+# No Duplicate records in Rejected population
+length(unique(rejected_records$Application.ID))
+# No Records with Age <18
+sort(unique(rejected_records$Age), decreasing = FALSE)
+# [1] 0
+sum(is.na(rejected_records$No.of.months.in.current.company))
+# [1] 0
+sum(is.na(rejected_records$No.of.months.in.current.residence))
+# [1] 0
+sum(is.na(rejected_records$No.of.times.30.DPD.or.worse.in.last.6.months))
+# [1] 0
+sum(is.na(rejected_records$No.of.trades.opened.in.last.12.months))
+# [1] 1460
+sum(is.na(rejected_records))
+# [1] 1425
+sum(is.na(rejected_records$Performance))
+```
+
+## Removing Records with Invalid Data
+
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Demographic Data contains 65 records with Age < 18 which is an invalid value
+# 65
+length(which(customer_master_data$Age < 18))
+
+# 20
+length(which(customer_master_data$Age <= 0))
+
+
+# 65 records exists with Age < 18, with only 1 as defaulter
+dplyr::select(customer_master_data[which(customer_master_data$Age < 18),], Age, Application.ID, Performance)
+
+# Removing records with Age < 18
+customer_master_data <- customer_master_data[-which(customer_master_data$Age < 18),]
+# [1] 69802
+nrow(customer_master_data)
+
+```
+
+## Missing Values - Data Imputation
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Replacing missing values which are small in number, using simple and straight-forward techniques e.g. Mode etc
+#
+# No.of.trades.opened.in.last.6.months
+#   - Only 1 missing value exist
+#   - Make NA value as '0'
+customer_master_data[which(is.na(customer_master_data$No.of.trades.opened.in.last.6.months)), 
+                     "No.of.trades.opened.in.last.6.months"] <- 0
+# Verify values
+length(which(is.na(customer_master_data$No.of.trades.opened.in.last.6.months)))
+
+# No.of.Dependents
+#   - Only 3 missing values exist
+#   - Make NA values for No.of.Dependents as '0'
+customer_master_data [which(is.na(customer_master_data$No.of.dependents)), 
+                      "No.of.dependents"] <- 0
+
+# Verify values 
+# [1] 0
+length(which(is.na(customer_master_data$No.of.dependents)))
+
+
+# Gender 
+#   - Only 2 missing values
+#   - Replacing with Mode value
+summary(factor(customer_master_data$Gender))
+
+customer_master_data[-which(customer_master_data$Gender %in% c("F","M")), 
+                     "Gender"] <- ModeFunc(customer_master_data$Gender)
+
+
+# Marital Status
+# Check for invalid i.e. NA values for Marital Status
+nrow(customer_master_data[ -which(customer_master_data$Marital.Status..at.the.time.of.application. 
+                                  %in% 
+                                  c("Married","Single")),])
+
+
+# Imputing with Mode i.e. "Married"
+customer_master_data[-which( customer_master_data$Marital.Status..at.the.time.of.application. 
+                             %in% 
+                             c("Married","Single")), 
+                     "Marital.Status..at.the.time.of.application."] <- ModeFunc(customer_master_data$Marital.Status..at.the.time.of.application.)
+
+# Profession
+#     - Only 12 values are missing
+#     - Impute with Mode ()
+summary(factor(customer_master_data$Profession))
+
+# Imputing with Mode Value i.e. "SAL"
+customer_master_data[-which(customer_master_data$Profession 
+                            %in% 
+                              c('SAL','SE','SE_PROF')), 
+                     "Profession"] <- ModeFunc(customer_master_data$Profession)
+
+# Type of residence
+#     - 8 values are missing
+#     - Impute with Mode ()
+summary(factor(customer_master_data$Type.of.residence))
+
+# Imputing with Mode value i.e. "Rented"
+customer_master_data[-which(customer_master_data$Type.of.residence 
+                            %in% 
+                              c('Company provided',
+                                'Living with Parents',
+                                'Others',
+                                'Owned',
+                                'Rented')), 
+                     "Type.of.residence"] <- ModeFunc(customer_master_data$Type.of.residence)
+
+
+# Number of months in current residence
+length(which(customer_master_data$No.of.months.in.current.residence <= 0))
+
+summary(customer_master_data$No.of.months.in.current.residence)
+
+# Number of months in current company
+# imputing age less than or equal to 0
+length(which(customer_master_data$No.of.months.in.current.company <= 0))
+
+
+summary(customer_master_data$No.of.months.in.current.company)
+
+# Education
+# 118 records are with NA values - Need Imputation with WoE
+nrow(customer_master_data[-which(customer_master_data$Education %in% c('Bachelor','Masters','Others','Phd','Professional')),])
+
+# Income 
+# 106 records are with NA values - Need Imputation with WoE
+length(which(customer_master_data$Income <= 0))
+
+customer_master_data$Income_imputed <- customer_master_data$Income
+customer_master_data[which(customer_master_data$Income_imputed <=0), "Income_imputed"] <- NA
+
+rejected_records$Income_imputed <- rejected_records$Income
+rejected_records[which(rejected_records$Income_imputed <=0), "Income_imputed"] <- NA
+
+View(customer_master_data)
+```
+
+## Outlier Treatment
+
+Note - Outliers removal is not required to perform on all measures, as it is not impacting any results
+Following are the variables with outliers.
+
+ Outstanding.Balance
+ Income
+ Avgas.CC.Utilization.in.last.12.months
+ Total.No.of.Trades
+ No.of.trades.opened.in.last.12.months
+ No.of.Inquiries.in.last.12.months..excluding.home...auto.loans.
+ No.of.PL.trades.opened.in.last.12.months
+ 
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+checkForOutliersDetection(customer_master_data, Outstanding.Balance) #function call
+# Outliers identified: 0
+summary(customer_master_data$Outstanding.Balance)
+hist(customer_master_data$Outstanding.Balance, main = "Histogram of Outstanding.Balance")
+
+# Income
+# Outliers identified: 0
+checkForOutliersDetection(customer_master_data, Income) 
+
+hist(customer_master_data$Income, main = "Histogram of Income")
+
+# Avgas.CC.Utilization.in.last.12.months
+# Outliers identified: 3624
+checkForOutliersDetection(customer_master_data, Avgas.CC.Utilization.in.last.12.months)
+
+hist(customer_master_data$Avgas.CC.Utilization.in.last.12.months, 
+     main = "Histogram of Avgas.CC.Utilization.in.last.12.months")
+
+outlier_range<-1.5*IQR(customer_master_data$Avgas.CC.Utilization.in.last.12.months, 
+                       na.rm = T) #1843 outlier
+upper_whisker=unname(quantile(customer_master_data$Avgas.CC.Utilization.in.last.12.months,
+                              0.95, 
+                              na.rm = T))+outlier_range
+lower_whisker=unname(quantile(customer_master_data$Avgas.CC.Utilization.in.last.12.months,
+                              0.05, 
+                              na.rm = T))-outlier_range
+customer_master_data2 <- customer_master_data[which(
+  (customer_master_data$Avgas.CC.Utilization.in.last.12.months>=upper_whisker | 
+  customer_master_data$Avgas.CC.Utilization.in.last.12.months<=lower_whisker) ==FALSE),]
+
+summary(customer_master_data$Performance)
+summary(customer_master_data2$Performance)
+
+# Total.No.of.Trades
+# Outliers identified: 6818
+checkForOutliersDetection(customer_master_data2, Total.No.of.Trades)
+
+hist(customer_master_data2$Total.No.of.Trades, main = "Histogram of Total.No.of.Trades")
+outlier_range<-1.5*IQR(customer_master_data2$Total.No.of.Trades, na.rm = T) #1843 outlier
+upper_whisker=unname(quantile(customer_master_data2$Total.No.of.Trades,
+                              0.95, 
+                              na.rm = T))+outlier_range
+lower_whisker=unname(quantile(customer_master_data2$Total.No.of.Trades,
+                              0.05, 
+                              na.rm = T))-outlier_range
+customer_master_data3 <- customer_master_data2[which(
+  (customer_master_data2$Total.No.of.Trades>=upper_whisker | 
+  customer_master_data2$Total.No.of.Trades<=lower_whisker)==FALSE),]
+
+summary(customer_master_data3$Performance)
+
+# Discarding the Outlier treatment as models are performing better with having Outliers
+# It is not always required to remove outliers, as they carry on important patters & trends
+# 
+# customer_master_data <- customer_master_data3
+```
+
+## Feature Engineering - Derived Variables
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+customer_master_data$Income_bin <- as.factor(cut(customer_master_data$Income,
+                                                    breaks = c(-Inf,1,11,21,31,40,Inf),
+                                                    labels=c("<0","1-10","11-20","21-30","31-40",">40"), 
+                                                           ordered = TRUE))
+
+customer_master_data$age_bin <- as.factor(cut(customer_master_data$Age,
+                                    breaks=c(-Inf,35,46,55,Inf),
+                                    labels=c("<35","35-45","46-55",">55"), ordered = TRUE,
+                                    right = FALSE))
+
+customer_master_data$current_residence_bin <- as.factor(cut(customer_master_data$No.of.months.in.current.residence,
+                                                            breaks = c(-Inf,13,25,
+                                                                       37,49,61,
+                                                                       73,85,97,
+                                                                       109,121,Inf),
+                                                            labels=c("<12","13-24",
+                                                                     "25-36","37-48",
+                                                                      "49-60","61-72",
+                                                                      "73-84","85-96",
+                                                                      "97-108","109-120",
+                                                                     ">120"),
+                                                            ordered = TRUE))
+
+customer_master_data$current_company_bin <- as.factor(cut(customer_master_data$No.of.months.in.current.company, 
+                                                        breaks = c(1,12, 24, 36, 48, 
+                                                                   60, 72,84,96, 
+                                                                   108,120,136),
+                                                            ordered = TRUE))
+
+```
+
+## Feature Engineering - Weight Of Evidence(WoE)/ Information Value(IV) Analysis
+
+The data contains status of customer performance through variable Performance Tag with value 1 representing Default and 0 for Non-Default. 
+We leverage R Information package for computing the Information Values (IV). But this package interprets 1 value for Good which is contradictory 
+to business case here as Performance Tag value. So, we need another variable Performance Tag for IV with values 1 and 0 replaced with 0 and 1 respectively.
+
+**Reference table for Variable Importance Analysis based on Information Value(IV)**
+
+         Information Value(IV)   Predictive Power
+           
+         
+                         <0.02 -> Useless for Prediction
+                    0.02 - 0.1 -> Weak Predictor
+                    0.1  - 0.3 -> Medium Predictor
+                    0.3  - 0.5 -> Strong Predictor
+                          >0.5 -> Suspecious
+ 
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Using WoE for both Variable Importance and also Missing Values
+
+library(Information)
+str(customer_master_data$Performance)
+
+# Performance Tag for IV with values 1 and 0 replaced with 0 and 1 respectively
+customer_master_data$Performance.Tag_forIV <- ifelse(customer_master_data$Performance == 0, 1, 0)
+
+IV <- create_infotables(data=customer_master_data, 
+                        y="Performance.Tag_forIV",
+                        bins = 10, 
+                        parallel = FALSE)
+
+IV_Value = data.frame(IV$Summary)
+
+# Printing values >=0.02
+arrange(IV_Value [IV_Value$IV >=0.02, ], desc(IV))
+```
+## Data Imputation based on WoE Analysis Approach
+
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+
+# Two New columns are being added for every variable whose WoE analysis being done
+# 1. Add WoE values for the variable as new feature (e.g. <variable>_WoE) and retain original feature/values in master data frame
+# 2. For imputation to NA/Missing/Incorrect values BIN find other BIN/Bucket with nearest WoE value close enough, 
+#    i.e. add new variable as <variable>_imputed
+#    2a) For a continuous variable - when nearest match found, use median value of matching bucket
+#    2b) For a continuous variable - when nearest match NOT found, use median for whole continuous variable
+#    2c) For a categorical variable - when nearest match found, use Mode value of matching bucket
+#    2d) For a categorical variable - when nearest match NOT found, use Mode value of whole categorical variable
+
+
+# 
+# WoE Analysis for Education
+Education_bin <- data.frame(IV$Tables$Education)
+print(IV$Tables$Education)
+
+plot_infotables(IV,"Education")
+
+# Creating a column with WoE for Education
+customer_master_data$Education_WoE <- ifelse(customer_master_data$Education=="Bachelor",
+                                             IV$Tables$Education$WOE[2],
+                                             ifelse(customer_master_data$Education=="Masters",
+                                                    IV$Tables$Education$WOE[3],
+                                                    ifelse(customer_master_data$Education=="Others",
+                                                           IV$Tables$Education$WOE[4],
+                                                           ifelse(customer_master_data$Education=="Phd",
+                                                                  IV$Tables$Education$WOE[5],
+                                                                  ifelse(customer_master_data$Education=="Professional",
+                                                                         IV$Tables$Education$WOE[6],
+                                                                         IV$Tables$Education$WOE[1])))))
+unique(customer_master_data$Education_WoE)
+
+# Replace 'NA' (WoE = -0.004112913) values with  Masters (nearest WoE = -0.008057761)
+customer_master_data$Education_imputed <- ifelse(customer_master_data$Education == "",
+                                                 "Masters",
+                                                 customer_master_data$Education)
+
+
+# WoE Analysis for Income
+Income.bin <- data.frame(IV$Tables$Income_imputed)
+
+print(Income.bin)
+
+
+# # Replace '[-0.5,5]' (WoE = 0.30218631) values with median of [6,10] (WoE = -0.27545857)
+# customer_master_data$Income_imputed <- ifelse(is.na(customer_master_data$Income_imputed),
+#                                                            median(customer_master_data$Income_imputed, na.rm = TRUE),
+#                                                            customer_master_data$Income_imputed)
+
+# creating a Woe column for Income for master dataframe
+customer_master_data$Income_imputed_WoE <- ifelse(is.na(customer_master_data$Income_imputed),
+   IV$Tables$Income_imputed$WOE[1],
+   ifelse(between(customer_master_data$Income_imputed,1,5),
+         IV$Tables$Income_imputed$WOE[2],
+         ifelse(between(customer_master_data$Income_imputed,6,10), 
+                IV$Tables$Income_imputed$WOE[3],
+                ifelse(between(customer_master_data$Income_imputed,11,16),
+                       IV$Tables$Income_imputed$WOE[4],
+                       ifelse(between(customer_master_data$Income_imputed,17,21),
+                              IV$Tables$Income_imputed$WOE[5],
+                              ifelse(between(customer_master_data$Income_imputed,22,26),
+                                     IV$Tables$Income_imputed$WOE[6],
+                                     ifelse(between(customer_master_data$Income_imputed,27,31),
+                                            IV$Tables$Income_imputed$WOE[7],
+                                            ifelse(between(customer_master_data$Income_imputed,32,36),
+            IV$Tables$Income_imputed$WOE[8],
+            ifelse(between(customer_master_data$Income_imputed,37,41),
+                   IV$Tables$Income_imputed$WOE[9],
+                   ifelse(between(customer_master_data$Income_imputed,42,48),
+                          IV$Tables$Income_imputed$WOE[10],
+                          IV$Tables$Income_imputed$WOE[11]))))))))))
+
+unique(customer_master_data$Income_imputed_WoE)
+# [1]  0.15505200 -0.06639700 -0.07956922  0.36098054  0.17694798 -0.31412051  0.26716146 -0.27545857 -0.08141794 -0.02551861  0.82915098
+
+# creating a Woe column for Income for rejected records
+rejected_records$Income_imputed_WoE <- ifelse(is.na(rejected_records$Income_imputed),
+           IV$Tables$Income_imputed$WOE[1],
+           ifelse(between(rejected_records$Income_imputed,1,5),
+                  IV$Tables$Income_imputed$WOE[2],
+                  ifelse(between(rejected_records$Income_imputed,6,10), 
+                         IV$Tables$Income_imputed$WOE[3],
+                         ifelse(between(rejected_records$Income_imputed,11,16),
+                                IV$Tables$Income_imputed$WOE[4],
+                                ifelse(between(rejected_records$Income_imputed,17,21),
+                                       IV$Tables$Income_imputed$WOE[5],
+                                       ifelse(between(rejected_records$Income_imputed,22,26),
+       IV$Tables$Income_imputed$WOE[6],
+       ifelse(between(rejected_records$Income_imputed,27,31),
+              IV$Tables$Income_imputed$WOE[7],
+              ifelse(between(rejected_records$Income_imputed,32,36),
+                     IV$Tables$Income_imputed$WOE[8],
+                     ifelse(between(rejected_records$Income_imputed,37,41),
+                            IV$Tables$Income_imputed$WOE[9],
+                          ifelse(between(rejected_records$Income_imputed,42,48),
+                                   IV$Tables$Income_imputed$WOE[10],
+                                   IV$Tables$Income_imputed$WOE[11]))))))))))
+
+unique(rejected_records$Income_imputed_WoE)
+
+# Replace NA with median for master dataframe
+customer_master_data[which(is.na(customer_master_data$Income_imputed)), 
+                     "Income_imputed"] <- median(customer_master_data$Income_imputed,
+                                                 na.rm = TRUE)
+# Replace NA with median for rejected records dataframe
+rejected_records$Income_imputed <- rejected_records$Income
+rejected_records[which(is.na(rejected_records$Income_imputed)), 
+                 "Income_imputed"] <- median(rejected_records$Income_imputed,
+                                             na.rm = TRUE)
+plot_infotables(IV,"Income_imputed")
+
+
+# WoE Analysis for Presence.of.open.home.loan
+# Creating a WoE column for Presence.of.open.home.loan
+Presence.of.open.home.loan.bin <- data.frame(IV$Tables$Presence.of.open.home.loan)
+print(IV$Tables$Presence.of.open.home.loan)
+
+plot_infotables(IV,"Presence.of.open.home.loan")
+
+
+customer_master_data$Presence.of.open.home.loan_WoE <- ifelse(is.na(customer_master_data$Presence.of.open.home.loan),
+                       IV$Tables$Presence.of.open.home.loan$WOE[1],
+                       ifelse(customer_master_data$Presence.of.open.home.loan==1,
+                              IV$Tables$Presence.of.open.home.loan$WOE[3],
+                              IV$Tables$Presence.of.open.home.loan$WOE[2]))
+# Replace 'NA' (WoE = 0.37444474) values with 1 (nearest WoE = 0.23740686)
+customer_master_data$Presence.of.open.home.loan_imputed <- ifelse(is.na(customer_master_data$Presence.of.open.home.loan),
+                           1,
+                           customer_master_data$Presence.of.open.home.loan)
+
+
+
+# WoE Analysis for Outstanding.Balance
+# Creating a WoE column for Outstanding.Balance
+Outstanding.Balance.bin <- data.frame(IV$Tables$Outstanding.Balance)
+print(IV$Tables$Outstanding.Balance)
+
+plot_infotables(IV,"Outstanding.Balance")
+
+customer_master_data$Outstanding.Balance_WoE <- ifelse(is.na(customer_master_data$Outstanding.Balance),
+                IV$Tables$Outstanding.Balance$WOE[1],
+                ifelse(customer_master_data$Outstanding.Balance <=6851,
+                       IV$Tables$Outstanding.Balance$WOE[2],
+                       ifelse(between(customer_master_data$Outstanding.Balance,6852,25590),
+                              IV$Tables$Outstanding.Balance$WOE[3],
+                              ifelse(between(customer_master_data$Outstanding.Balance,25600,386878),
+                                     IV$Tables$Outstanding.Balance$WOE[4],
+                                     ifelse(between(customer_master_data$Outstanding.Balance,386879,585389),
+                                            IV$Tables$Outstanding.Balance$WOE[5],
+                                           ifelse(between(customer_master_data$Outstanding.Balance,585402,774181),
+           IV$Tables$Outstanding.Balance$WOE[6],
+          ifelse(between(customer_master_data$Outstanding.Balance,774188,972265),
+                 IV$Tables$Outstanding.Balance$WOE[7],
+                 ifelse(between(customer_master_data$Outstanding.Balance,972273,1357072),
+                        IV$Tables$Outstanding.Balance$WOE[8],
+                        ifelse(between(customer_master_data$Outstanding.Balance,1357076,2960907),
+                               IV$Tables$Outstanding.Balance$WOE[9],
+                               ifelse(between(customer_master_data$Outstanding.Balance,2960909,3282409),
+                                      IV$Tables$Outstanding.Balance$WOE[10],
+                                      IV$Tables$Outstanding.Balance$WOE[11]))))))))))
+unique(customer_master_data$Outstanding.Balance_WoE)
+
+# Calculate for rejected population
+rejected_records$Outstanding.Balance_WoE <- ifelse(is.na(rejected_records$Outstanding.Balance),
+                IV$Tables$Outstanding.Balance$WOE[1],
+                ifelse(rejected_records$Outstanding.Balance <=6851,
+                       IV$Tables$Outstanding.Balance$WOE[2],
+                       ifelse(between(rejected_records$Outstanding.Balance,6852,25590),
+                              IV$Tables$Outstanding.Balance$WOE[3],
+                              ifelse(between(rejected_records$Outstanding.Balance,25600,386878),
+                                     IV$Tables$Outstanding.Balance$WOE[4],
+                                     ifelse(between(rejected_records$Outstanding.Balance,386879,585389),
+                                            IV$Tables$Outstanding.Balance$WOE[5],
+                                            ifelse(between(rejected_records$Outstanding.Balance,585402,774181),
+            IV$Tables$Outstanding.Balance$WOE[6],
+            ifelse(between(rejected_records$Outstanding.Balance,774188,972265),
+                   IV$Tables$Outstanding.Balance$WOE[7],
+                   ifelse(between(rejected_records$Outstanding.Balance,972273,1357072),
+                          IV$Tables$Outstanding.Balance$WOE[8],
+                          ifelse(between(rejected_records$Outstanding.Balance,1357076,2960907),
+                                 IV$Tables$Outstanding.Balance$WOE[9],
+                                 ifelse(between(rejected_records$Outstanding.Balance,2960909,3282409),
+                                        IV$Tables$Outstanding.Balance$WOE[10],
+                                        IV$Tables$Outstanding.Balance$WOE[11]))))))))))
+
+unique(rejected_records$Outstanding.Balance_WoE)
+
+# Replace 'NA' (WoE = 0.3744447) values with median of [1357118,2960907] (WoE = 0.3818808)
+customer_master_data$Outstanding.Balance_imputed <- ifelse(is.na(customer_master_data$Outstanding.Balance),
+                    median(filter(customer_master_data, Outstanding.Balance >=1357076 & Outstanding.Balance<=2960907) [, "Outstanding.Balance"]),
+                    customer_master_data$Outstanding.Balance)
+# No 'NA' values for Outstanding.Balance in Rejected population
+sum(is.na(rejected_records$Outstanding.Balance))
+rejected_records$Outstanding.Balance_imputed <- rejected_records$Outstanding.Balance
+
+# WoE Analysis for Avgas.CC.Utilization.in.last.12.months
+print(IV$Tables$Avgas.CC.Utilization.in.last.12.months)
+plot_infotables(IV,"Avgas.CC.Utilization.in.last.12.months")
+
+
+customer_master_data$Avgas.CC.Utilization.in.last.12.months_WoE <- ifelse(is.na(customer_master_data$Avgas.CC.Utilization.in.last.12.months),
+                                   IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[1],
+                                   ifelse(customer_master_data$Avgas.CC.Utilization.in.last.12.months<=4,
+                                          IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[2],
+                                          ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,5,6),
+          IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[3],
+          ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,7,8),
+                 IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[4],
+                 ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,9,11),
+                        IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[5],
+                        ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,12,14),
+                               IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[6],
+                               ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,15,21),
+                                      IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[7],
+                                      ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,22,37),
+                                             IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[8],
+                                             ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,38,51),
+             IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[9],
+             ifelse(between(customer_master_data$Avgas.CC.Utilization.in.last.12.months,52,71),
+                    IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[10],
+                    IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[11]))))))))))
+unique(customer_master_data$Avgas.CC.Utilization.in.last.12.months_WoE)
+
+# Calculate for rejected population
+rejected_records$Avgas.CC.Utilization.in.last.12.months_WoE <- ifelse(is.na(rejected_records$Avgas.CC.Utilization.in.last.12.months),
+                                   IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[1],
+                                   ifelse(rejected_records$Avgas.CC.Utilization.in.last.12.months<=4,
+                                          IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[2],
+                                          ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,5,6),
+          IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[3],
+          ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,7,8),
+                 IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[4],
+                 ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,9,11),
+                        IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[5],
+                        ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,12,14),
+                               IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[6],
+                               ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,15,21),
+                                      IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[7],
+                                      ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,22,37),
+                                             IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[8],
+                                             ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,38,51),
+             IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[9],
+             ifelse(between(rejected_records$Avgas.CC.Utilization.in.last.12.months,52,71),
+                    IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[10],
+                    IV$Tables$Avgas.CC.Utilization.in.last.12.months$WOE[11]))))))))))
+
+unique(rejected_records$Avgas.CC.Utilization.in.last.12.months_WoE)
+
+# Replace 'NA' (WoE = -0.1159976) values with median of [72,113] (nearest WoE = -0.38102610)
+customer_master_data$Avgas.CC.Utilization.in.last.12.months_imputed <- ifelse(is.na(customer_master_data$Avgas.CC.Utilization.in.last.12.months),
+                                       median(filter(customer_master_data, Avgas.CC.Utilization.in.last.12.months >=72 & Avgas.CC.Utilization.in.last.12.months<=113) [, "Avgas.CC.Utilization.in.last.12.months"]),
+                                       customer_master_data$Avgas.CC.Utilization.in.last.12.months)
+
+
+# NA values exist for Avgas.CC.Utilization.in.last.12.months in rejected population
+sum(is.na(rejected_records$Avgas.CC.Utilization.in.last.12.months))
+# [1] 35
+rejected_records$Avgas.CC.Utilization.in.last.12.months_imputed <- ifelse(is.na(rejected_records$Avgas.CC.Utilization.in.last.12.months),
+                                       median(filter(rejected_records, Avgas.CC.Utilization.in.last.12.months >=72 & Avgas.CC.Utilization.in.last.12.months<=113) [, "Avgas.CC.Utilization.in.last.12.months"]),
+                                   rejected_records$Avgas.CC.Utilization.in.last.12.months)
+
+sum(is.na(rejected_records$Avgas.CC.Utilization.in.last.12.months_imputed))
+# [1] 0
+
+summary(customer_master_data)
+summary(rejected_records)
+```
+
+## Feature Engineering - Encoding/Dummy Variables
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Using No.of.dependents as numerical only
+# customer_master_data$No.of.dependents <- as.factor(customer_master_data$No.of.dependents)
+# customer_master_data$No.of.dependents <- as.numeric(customer_master_data$No.of.dependents)
+
+# Gender
+customer_master_data$Gender <- as.factor(customer_master_data$Gender)
+levels(customer_master_data$Gender) <- c(1,0)
+
+# Marital Status
+customer_master_data$Marital.Status..at.the.time.of.application. <- as.factor(customer_master_data$Marital.Status..at.the.time.of.application.)
+levels(customer_master_data$Marital.Status..at.the.time.of.application.) <- c(1,0)
+
+# Type of Residence
+customer_master_data$Type.of.residence <- as.factor(customer_master_data$Type.of.residence)
+
+# One-Hot encoding for Education_imputed
+customer_master_data$Education_imputed <- as.factor(customer_master_data$Education_imputed)
+dummy_education <- data.frame(model.matrix(~Education_imputed,
+    data=customer_master_data))
+dummy_education <- dummy_education[,-1]
+customer_master_data <- cbind(customer_master_data, dummy_education)
+
+# One-Hot encoding for Profession
+customer_master_data$Profession <- as.factor(customer_master_data$Profession)
+dummy_profession <- data.frame(model.matrix(~Profession,
+     data=customer_master_data))
+dummy_profession <- dummy_profession[,-1]
+customer_master_data <- cbind(customer_master_data, dummy_profession)
+
+# One-Hot encoding for Residence Type
+customer_master_data$Type.of.residence <- as.factor(customer_master_data$Type.of.residence)
+dummy_residencetype <- data.frame(model.matrix(~Type.of.residence,
+        data=customer_master_data))
+dummy_residencetype <- dummy_residencetype[,-1]
+customer_master_data <- cbind(customer_master_data, dummy_residencetype)
+
+# Creating a .CSV file with WoE values
+write.csv(customer_master_data,"customer_master_data_cleaned_WoE_feature_engineering.csv")
+```
+
+## Exploratory Data Analysis (EDA)
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+graph_data <- customer_master_data
+
+# Columns considered to convert into factor
+toFactor_colname <- c("Gender","Marital.Status..at.the.time.of.application.",
+                      "No.of.dependents","Education","Profession",
+                      "Income_bin","age_bin","current_residence_bin",
+                      "current_company_bin","Type.of.residence",
+                      "Presence.of.open.auto.loan","Presence.of.open.home.loan",
+                      "No.of.times.30.DPD.or.worse.in.last.12.months",
+                      "No.of.times.30.DPD.or.worse.in.last.6.months",
+                      "No.of.times.60.DPD.or.worse.in.last.12.months",
+                      "No.of.times.60.DPD.or.worse.in.last.6.months",
+                      "No.of.times.90.DPD.or.worse.in.last.12.months",
+                      "No.of.times.90.DPD.or.worse.in.last.6.months")
+
+
+graph_data[toFactor_colname] <- lapply(graph_data[toFactor_colname],factor)
+
+graph_data$Performance <- as.factor(ifelse(graph_data$Performance==0,
+                                           "Non-Defaulters",
+                                           "Defaulters"))
+
+ggplot(graph_data,aes(x=Performance,fill=Performance)) +
+  geom_bar() +  
+  geom_text(stat = "count", aes(y = ((..count..)/sum(..count..)), 
+                                label = scales::percent((..count..)/sum(..count..))),
+            vjust =-0.25)
+# Only 4.2% defaulters and this is an unbalanced data
+
+str(graph_data)
+
+graph_data_categorical <- graph_data[,sapply(graph_data,is.factor)]
+graph_data_continuous <- graph_data[,!sapply(graph_data,is.factor)]
+graph_data_continuous <- graph_data_continuous[,-c(1,2)]
+
+graph_data_categorical <- graph_data_categorical %>% dplyr::select(-Performance,Performance)
+
+View(graph_data_categorical)
+View(graph_data_continuous)
+```
+
+### Plots for Independent factor variables
+
+```{r message=FALSE, warning=FALSE, fig.width = 25, fig.height = 15, out.width = "100%"}
+
+gather(graph_data_categorical, x, y, Gender:current_company_bin) %>%
+  ggplot(aes(x = y, color = Performance, fill = Performance)) +
+  geom_density(alpha = 0.3) +
+  facet_wrap( ~ x, scales = "free", ncol = 3)
+```
+
+### Independent continuous variable graph
+```{r message=FALSE, warning=FALSE, fig.width = 25, fig.height = 15, out.width = "100%"}
+
+# Histograms
+# Excluding variables of Type - Original with NA/Missing Values, Dummy Variables & WoE Values
+graph_data_continuous [, -c(1, 4, 11, 14, 15, 16, 
+                            17, 19, 21, 23, 24, 25, 
+                            26, 27, 28, 29, 30, 31, 32) ] %>% 
+  gather() %>%
+  ggplot(aes(value)) +
+  facet_wrap( ~ key, scales = "free") + geom_histogram()
+
+## boxplots
+graph_data_continuous_1 <- graph_data_continuous %>% dplyr::select(-Outstanding.Balance,Outstanding.Balance)
+new_col_names <- c("Age","Income","No.curr.resi","No.curr.comp",
+                   "AvgCC.Util.12","trades_6","trades_12",
+                   "PL_6","PL_12","inq_6_auto","In_12_auto",
+                   "total_trade","Perf","Outstanding.balance")
+
+colnames(graph_data_continuous_1) <- new_col_names
+
+temp <- melt(graph_data_continuous_1[,1:13],id.vars = "Perf")
+ggplot(data = temp, aes(x=variable, y=value)) + geom_boxplot(aes(fill=Perf))
+
+boxplot(graph_data_continuous_1$Outstanding.balance)
+
+```
+
+
+### Multivariate analysis
+
+```{r message=FALSE, warning=FALSE, fig.width = 25, fig.height = 15, out.width = "100%"}
+
+graph_data_multivariate <- dplyr::filter(graph_data,graph_data$Performance=="Defaulters")
+
+ggplot(data = graph_data_multivariate, aes(x = age_bin,y=Performance, fill = Income_bin)) +
+  geom_bar(aes(y = prop.table(..count..) * 100),
+           position = "dodge") + 
+  geom_text(aes(y = round(prop.table(..count..) * 100 + 0.5,2), 
+                label = paste0(round(prop.table(..count..) * 100,2), '%')), 
+            stat = 'count', 
+            position = position_dodge(.9), 
+            size = 3) + 
+  labs(x = 'Age group', y = 'Defaulters', fill = 'Income Group')
+
+ggplot(data = graph_data_multivariate, aes(x = age_bin,y=Performance, fill = Gender)) +
+  geom_bar(aes(y = prop.table(..count..) * 100),
+           position = "dodge") + 
+  geom_text(aes(y = round(prop.table(..count..) * 100 + 0.5,2), 
+                label = paste0(round(prop.table(..count..) * 100,2), '%')), 
+            stat = 'count', 
+            position = position_dodge(.9), 
+            size = 3) + 
+  labs(x = 'Age group', y = 'Defaulters', fill = 'Gender')
+
+ggplot(data = graph_data_multivariate, aes(x = Income_bin,y=Performance, fill = Gender)) +
+  geom_bar(aes(y = prop.table(..count..) * 100),
+           position = "dodge") + 
+  geom_text(aes(y = round(prop.table(..count..) * 100 + 0.5,2), 
+                label = paste0(round(prop.table(..count..) * 100,2), '%')), 
+            stat = 'count', 
+            position = position_dodge(.9), 
+            size = 3) + 
+  labs(x = 'Income group', y = 'Defaulters', fill = 'Gender')
+
+ggplot(data = graph_data_multivariate, aes(x = No.of.dependents,y=Performance, fill = Income_bin)) +
+  geom_bar(aes(y = prop.table(..count..) * 100),
+           position = "dodge") + 
+  geom_text(aes(y = round(prop.table(..count..) * 100 + 0.5,2), 
+                label = paste0(round(prop.table(..count..) * 100,2), '%')), 
+            stat = 'count', 
+            position = position_dodge(.9), 
+            size = 3) + 
+  labs(x = 'Number of Dependents', y = 'Defaulters', fill = 'Income group')
+
+ggplot(data = graph_data_multivariate, aes(x = Type.of.residence,y=Performance, fill = Income_bin)) +
+  geom_bar(aes(y = prop.table(..count..) * 100),
+           position = "dodge") + 
+  geom_text(aes(y = round(prop.table(..count..) * 100 + 0.5,2), 
+                label = paste0(round(prop.table(..count..) * 100,2), '%')), 
+            stat = 'count', 
+            position = position_dodge(.9), 
+            size = 3) + 
+  labs(x = 'Type of Residence', y = 'Defaulters', fill = 'Income group')
+
+```
+
+## EDA Inferences
+
+**Top 7 Importat variables are highlighted**
+
+Variable                                                        Importance        Conclusion  
+
+**Age                                                             - High            - Age group of 35-55 is significant**  
+Gender                                                          - Low             - Not significant feature  
+Marital Status                                                  - Medium          - EDA also confirms Married Significant  
+No of dependents                                                - Low             - Not significant feature  
+Income                                                          - Low             - Not significant feature  
+Education                                                       - Low             - Not significant feature  
+**Profession                                                      - High            - Salaried is significant with high frequency**  
+**Type of residence                                               - High            - Rented is the most significant with high**  
+**No of months in current residence                               - High            - < 12 months is high frequency**  
+**No of months in current company                                 - Medium          - EDA also confirms <24 Months has significant default**  
+No of times 90 DPD or worse in last 6 months                    - Medium          - Higher the number has default effect  
+No of times 60 DPD or worse in last 6 months                    - Medium          - Higher the number has default effect  
+**No of times 30 DPD or worse in last 6 months                    - Medium          - Higher the number has default effect**  
+No of times 90 DPD or worse in last 12 months                   - Medium          - Higher the number has default effect  
+No of times 60 DPD or worse in last 12 months                   - Medium          - Higher the number has default effect  
+No of times 30 DPD or worse in last 12 months                   - Low             - Not significant feature  
+**Avgas CC Utilization in last 12 months                          - High            - Most of the utilization are <20**  
+No of trades opened in last 6 months                            - Low             - Not significant feature  
+No of trades opened in last 12 months                           - Low             - Not significant feature  
+No of PL trades opened in last 6 months                         - Low             - Not significant feature  
+No of PL trades opened in last 12 months                        - Low             - Not significant feature                       
+No of Inquiries in last 6 months (excluding home & auto loans)  - Low             - Not significant feature  
+No of Inquiries in last 12 months (excluding home & auto loans) - Low             - Not significant feature  
+Presence of open home loan                                      - Low             - Not significant feature  
+Outstanding Balance                                             - Low             - Not significant feature  
+Total No of Trades                                              - Low             - Not significant feature  
+Presence of open auto loan                                      - Low             - Not significant feature  
+
+
+## Feature Selection - Based on WoE/IV and Correlation Analysis
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+# Feature Selection based on WoE/IV = 0.02 to 0.5
+arrange(IV_Value [IV_Value$IV >=0.02, ], desc(IV))[1]
+```
+
+### Correlation Matrix
+
+```{r message=FALSE, warning=FALSE, fig.width = 40, fig.height = 40, out.width = "300%"}
+
+
+# Correlation matrix
+features_for_correlationMatrix <-
+  c(
+    "Income_imputed",
+    "No.of.months.in.current.company",
+    "No.of.months.in.current.residence",
+    
+    "Avgas.CC.Utilization.in.last.12.months_WoE",
+    "Avgas.CC.Utilization.in.last.12.months_imputed",
+    "Outstanding.Balance_WoE",
+    "Outstanding.Balance_imputed",
+    #"Presence.of.open.home.loan_WoE",
+    #"Presence.of.open.home.loan_imputed",
+    
+    
+    "Total.No.of.Trades",
+    "No.of.trades.opened.in.last.6.months",
+    "No.of.trades.opened.in.last.12.months",
+    "No.of.PL.trades.opened.in.last.6.months",
+    "No.of.PL.trades.opened.in.last.12.months",
+    
+    "No.of.Inquiries.in.last.12.months..excluding.home...auto.loans.",
+    "No.of.Inquiries.in.last.6.months..excluding.home...auto.loans.",
+    
+    "No.of.times.30.DPD.or.worse.in.last.6.months",
+    "No.of.times.60.DPD.or.worse.in.last.6.months",
+    "No.of.times.90.DPD.or.worse.in.last.6.months",
+    "No.of.times.30.DPD.or.worse.in.last.12.months",
+    "No.of.times.60.DPD.or.worse.in.last.12.months",
+    "No.of.times.90.DPD.or.worse.in.last.12.months"
+  )
+plot_correlationMatrix (customer_master_data, features_for_correlationMatrix)
+```
+
+### Correlation Analysis
+ 
+ 1. All DPD columns are highly correlated (0.8 to 0.95), chosing one variable with high IV value range (0.02 to 0.5)
+    i.e. "No.of.times.30.DPD.or.worse.in.last.6.months"
+ 2. All Trades related features are highly correlated 0.6 to 0.94, chosing only with high WoE value
+    i.e. No.of.trades.opened.in.last.12.months"
+ 3. Feature "Outstanding.Balance_WoE" is correlated (0.65) with "Avgas.CC.Utilization.in.last.12.months_WoE" but considering 
+    based on business intution. Also considering "Outstanding.Balance_imputed"
+ 4. Discarding both     "Presence.of.open.home.loan_WoE" and "Presence.of.open.home.loan_imputed" because they both are highly 
+    correlated (0.93 and 0.94 respectively) with "Outstanding.Balance_imputed"
+    
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 10, out.width = "100%"}
+
+## Final Feature selection
+#  Following are list of features which are not having high correlation -0.5 to 0.5 with other featues
+
+demographic_data_features <- c("Income_imputed",
+                               "No.of.months.in.current.company",
+                               "No.of.months.in.current.residence")
+
+creditbureau_data_features <- c(    "Avgas.CC.Utilization.in.last.12.months_WoE",
+                                    "Avgas.CC.Utilization.in.last.12.months_imputed",
+                                    "Outstanding.Balance_WoE",
+                                    "Outstanding.Balance_imputed",
+                                    "No.of.times.30.DPD.or.worse.in.last.6.months",
+                                    "No.of.trades.opened.in.last.12.months")
+
+```
+
+## Model Building - Split Train (and Validation) & Test Datasets  
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+# Not using scale technique as there is no gain/loss with model performance/accuracy metrics
+# customer_master_data[, scale_col] <- sapply(customer_master_data[, scale_col], scale)
+View(customer_master_data)
+
+set.seed(100)
+# Randomly divide the data into training and test sets (stratified by class)
+index <- createDataPartition(customer_master_data$Performance, p = 0.7, list = FALSE)
+train_data <- customer_master_data[index, ]
+summary(train_data$Performance)
+2063/(46800+2063)*100
+
+
+test_data  <- customer_master_data[-index, ]
+summary(test_data$Performance)
+883/(20056+883)*100
+
+
+test_actual_default <- factor(ifelse(test_data$Performance ==1,"Yes","No"))
+```
+
+## Model Evaluation - Common Functions
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+# Function for Choosing the optimal probalility cutoff
+perform_fn <- function(cutoff, test_data_prediction) 
+{
+  predicted_default <- factor(ifelse(test_data_prediction >= cutoff, "Yes", "No"))
+  conf <- confusionMatrix(predicted_default, test_actual_default, positive = "Yes")
+  acc <- conf$overall[1]
+  sens <- conf$byClass[1]
+  spec <- conf$byClass[2]
+  out <- t(as.matrix(c(sens, spec, acc))) 
+  colnames(out) <- c("sensitivity", "specificity", "accuracy")
+  return(out)
+}
+
+# Function for calculating Optimal Cutoff
+findOptimalCutOff <- function (test_data_prediction, thresholdStart, thresholdEnd) {
+  # Summary of test probability
+  summary(test_data_prediction)
+  
+  #s = seq(.03,.14,length=100)
+  s = seq(thresholdStart, thresholdEnd,length=100)
+  OUT = matrix(0,100,3)
+  
+  for(i in 1:100)
+  {
+    OUT[i,] = perform_fn(s[i], test_data_prediction)
+  } 
+  
+  
+  plot(s, OUT[,1],xlab="Cutoff",ylab="Value",cex.lab=1.5,cex.axis=1.5,ylim=c(0,1),type="l",lwd=2,axes=FALSE,col=2)
+  axis(1,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+  axis(2,seq(0,1,length=5),seq(0,1,length=5),cex.lab=1.5)
+  lines(s,OUT[,2],col="darkgreen",lwd=2)
+  lines(s,OUT[,3],col=4,lwd=2)
+  box()
+  legend(0.75,0.50,col=c(2,"darkgreen",4,"darkred"),lwd=c(2,2,2,2),c("Sensitivity","Specificity","Accuracy"))
+  
+  cutoff <- s[which(abs(OUT[,1]-OUT[,2])<0.02)]
+  
+  cat("Optimal Cutoff = ", round(cutoff,3)[1])
+  cat ("\n\n")
+  
+  return(round(cutoff,3)[1])
+}
+
+## Function for calculation of lift and cumulative gain
+lift <- function(labels , predicted_prob, groups=10) {
+  
+  if(is.factor(labels)) labels  <- as.integer(as.character(labels ))
+  if(is.factor(predicted_prob)) predicted_prob <- as.integer(as.character(predicted_prob))
+  helper = data.frame(cbind(labels , predicted_prob))
+  helper[,"bucket"] = ntile(-helper[,"predicted_prob"], groups)
+  gaintable = helper %>% group_by(bucket)  %>%
+    summarise_at(vars(labels ), funs(total = n(),
+                                     totalresp=sum(., na.rm = TRUE))) %>%
+    mutate(Cumresp = cumsum(totalresp),
+           Gain=Cumresp/sum(totalresp)*100,
+           Cumlift=Gain/(bucket*(100/groups)))
+  return(gaintable)
+}
+
+# For plotting the gain chart and to compute KS Statistic
+GainLiftChart_KSStatistic <- function(model,data, value) {
+  
+  temp <- data
+  temp$Predict <- predict(model,type=value,newdata=temp)
+  
+  LG = lift(temp$Performance, temp$Predict, groups = 10)
+  # Gain Chart 
+  plot(LG$bucket,LG$Gain,col="red",type="l",main="Gain Chart",xlab="% of total targeted",ylab = "% of positive Response")
+  
+  # Lift Chart 
+  plot(LG$bucket,LG$Cumlift,col="blue",type="l",main="Lift Chart",xlab="% of total targeted",ylab = "Lift")
+  write.csv(LG,"Lift-CumulativeGain-table.csv")
+  
+  # KS-Statistic
+  if(value=="raw"){
+    pred_object_test<- prediction(as.numeric(temp$Predict), as.numeric(temp$Performance))
+  }else{
+    pred_object_test<- prediction(temp$Predict,temp$Performance)
+  }
+  
+  performance_measures_test<- performance(pred_object_test, "tpr", "fpr")
+  ks_table_test <- attr(performance_measures_test, "y.values")[[1]] - 
+    (attr(performance_measures_test, "x.values")[[1]])
+  
+  #LG$KS <- ks_table_test
+  print(LG)
+  max(ks_table_test)
+  
+}
+
+evaluateClassificationModel <- function (test_pred, test_actual_default, cutOff) {  
+  
+  # Get optimal cut-off 
+  #cutOff <- findOptimalCutOff(test_pred, thresholdStart, thresholdEnd)
+  
+  test_pred_default <- factor(ifelse(test_pred >= cutOff, "Yes", "No"))
+  table(test_actual_default,test_pred_default)
+  
+  #install.packages("e1071")
+  library(e1071)
+  
+  test_conf <- confusionMatrix(test_pred_default, test_actual_default, positive = "Yes")
+  acc <- test_conf$overall[1]
+  sens <- test_conf$byClass[1]
+  spec <- test_conf$byClass[2]
+  
+  print(test_conf)
+  
+  precission_recall_f <- accuracy.meas(test_actual_default, test_pred_default, cutOff)
+  
+  # Using only F score 
+  
+  # Precision can be seen as a measure of exactness or quality, whereas recall is a measure of completeness or 
+  # quantity. In simple terms, high precision means that an algorithm returned substantially more relevant 
+  # results than irrelevant ones, while high recall means that an algorithm returned most of the relevant results.
+  
+  roc_metrics <- roc.curve(test_actual_default, test_pred_default, plotit = T)
+  
+  metrics <- data.frame(Accuracy=acc, 
+                        Sensitivity=sens, 
+                        Specificity = spec,
+                        F_score=precission_recall_f$F,
+                        Threshold=precission_recall_f$threshold,
+                        AUC=roc_metrics$auc,
+                        False_positive_Rate=roc_metrics$false.positive.rate[2],
+                        True_positive_Rate=roc_metrics$true.positive.rate[2])
+  
+  print(metrics)
+  
+  return(metrics)
+}
+```
+
+###  Model Building (Unbalanced) -  Logistic Regression with Demographic Data
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+# Simple Logistic Regression model Using Demographic data 
+# Using WoE Variables as derived features in addition original features (imputed for mising / incorrect values)
+# As WoE is created based on Target Encoding, in general is not directly correlated with base variable
+
+# Using WoE Variable (Note: results are same with Income_imputed as well instead of Income_imputed_WoE)
+# Also Income_imputed becomes significant when both are used and they both are highly correlated
+
+logistic_model_demographic_data_unbalanced <- glm(formula = Performance ~  No.of.months.in.current.residence + 
+                                                                Income_imputed_WoE +
+                                                                No.of.months.in.current.company, 
+                                                 family = "binomial", 
+                                                 data = train_data [, -1])
+summary (logistic_model_demographic_data_unbalanced)
+# AIC: 16983
+sort(vif(logistic_model_demographic_data_unbalanced),decreasing = TRUE)
+# Income_imputed_WoE No.of.months.in.current.residence   No.of.months.in.current.company 
+# 1.017824                          1.016867                          1.016003 
+
+test_pred = predict(logistic_model_demographic_data_unbalanced, type = "response", 
+                    newdata = test_data)
+
+summary(test_pred)
+cutOff <- findOptimalCutOff(test_pred, .03,.14)
+# Optimal Cutoff =  0.042
+
+logistic_model_demographic_data_metrics <- evaluateClassificationModel(test_pred,
+                            test_actual_default, 
+                            cutOff)
+
+rownames(logistic_model_demographic_data_metrics) <- "DemographicData - GLM - Unbalanced"
+model_Metrics <- rbind(logistic_model_demographic_data_metrics)
+
+# test_pred_default <- factor(ifelse(test_pred >= 0.040, "Yes", "No"))
+# Accuracy    : 0.5373
+# Sensitivity : 0.55606
+# Specificity : 0.53650
+# 
+# F           : 0.040
+#
+# Area under the curve (AUC): 0.546
+```
+
+### Model Building (Unbalanced) -  Logistic Regression with Demographic & Credit Bureau Data
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+# Using WoE Variables as derived features in addition original features (imputed for mising / incorrect values)
+# As WoE is created based on Target Encoding, in general is not directly correlated with base variable
+
+logistic_model_application_and_creditdata <- glm(formula = Performance ~ Income_imputed + 
+                                  No.of.months.in.current.company +
+                                  No.of.months.in.current.residence +
+                                  Avgas.CC.Utilization.in.last.12.months_WoE +
+                                  Avgas.CC.Utilization.in.last.12.months_imputed +
+                                  Outstanding.Balance_WoE +
+                                  Outstanding.Balance_imputed +
+                                  No.of.times.30.DPD.or.worse.in.last.6.months +
+                                  No.of.trades.opened.in.last.12.months, 
+          family = "binomial", 
+          data = train_data [, -1])
+summary (logistic_model_application_and_creditdata)
+# AIC: 16374
+
+logistic_model_application_and_creditdata_2 <- stepAIC(logistic_model_application_and_creditdata, direction="both")
+
+summary(logistic_model_application_and_creditdata_2)
+# AIC: 16372
+
+# Removing Income_imputed as p-value = 0.142681
+logistic_model_application_and_creditdata_3 <- glm(formula = Performance ~ 
+                                    No.of.months.in.current.company +
+                                    No.of.months.in.current.residence +
+                                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                                    Avgas.CC.Utilization.in.last.12.months_imputed +
+                                    Outstanding.Balance_WoE +
+                                    Outstanding.Balance_imputed +
+                                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                                    No.of.trades.opened.in.last.12.months,
+                                         family = "binomial", 
+                                         data = train_data[, -1])
+
+summary(logistic_model_application_and_creditdata_3)
+# AIC: 16374
+sort(vif(logistic_model_application_and_creditdata_3),decreasing = TRUE)
+
+# Removing Outstanding.Balance_imputed due to high p-value = 0.564429
+logistic_model_application_and_creditdata_4 <- glm(formula = Performance ~ 
+                                    No.of.months.in.current.company +
+                                    No.of.months.in.current.residence +
+                                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                                    Avgas.CC.Utilization.in.last.12.months_imputed +
+                                    Outstanding.Balance_WoE +
+                                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                                    No.of.trades.opened.in.last.12.months,
+                                         family = "binomial", 
+                                         data = train_data[, -1])
+
+summary(logistic_model_application_and_creditdata_4)
+# AIC: 16372
+sort(vif(logistic_model_application_and_creditdata_4),decreasing = TRUE)
+
+# Removing No.of.months.in.current.company as p-value = 0.08977
+logistic_model_application_and_creditdata_5 <- glm(formula = Performance ~  
+                                    No.of.months.in.current.residence +
+                                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                                    Avgas.CC.Utilization.in.last.12.months_imputed +
+                                    Outstanding.Balance_WoE +
+                                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                                    No.of.trades.opened.in.last.12.months,
+                                         family = "binomial", 
+                                         data = train_data[, -1])
+
+summary(logistic_model_application_and_creditdata_5)
+# AIC: 16368
+sort(vif(logistic_model_application_and_creditdata_5),decreasing = TRUE)
+
+# Removing No.of.months.in.current.residence due to high p-value = 0.099945
+logistic_model_application_and_creditdata_6 <- glm(formula = Performance ~  
+                                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                                    Avgas.CC.Utilization.in.last.12.months_imputed +
+                                    Outstanding.Balance_WoE +
+                                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                                    No.of.trades.opened.in.last.12.months,
+            
+                                         family = "binomial", data = train_data[, -1])
+summary(logistic_model_application_and_creditdata_6)
+# AIC: 16374
+sort(vif(logistic_model_application_and_creditdata_6),decreasing = TRUE)
+
+# Removing Avgas.CC.Utilization.in.last.12.months_imputed
+# Avgas.CC.Utilization.in.last.12.months_WoE - VIF=2.690655, p-value=5.59e-13
+# Avgas.CC.Utilization.in.last.12.months_imputed - VIF=1.909329 ,p-value=0.008180
+cor(train_data$Avgas.CC.Utilization.in.last.12.months_imputed, train_data$Avgas.CC.Utilization.in.last.12.months_WoE)
+# -0.7412454
+
+logistic_model_application_and_creditdata_7 <- glm(formula = Performance ~  
+                                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                                    Outstanding.Balance_WoE +
+                                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                                    No.of.trades.opened.in.last.12.months,
+            family = "binomial", data = train_data[, -1])
+summary(logistic_model_application_and_creditdata_7)
+# AIC: 16378
+sort(vif(logistic_model_application_and_creditdata_7),decreasing = TRUE)
+# Outstanding.Balance_WoE   Avgas.CC.Utilization.in.last.12.months_WoE        No.of.trades.opened.in.last.12.months No.of.times.30.DPD.or.worse.in.last.6.months 
+#                1.954735                                     1.776972                                     1.297773                                     1.292529 
+
+logistic_model_application_and_creditdata_unbalanced <- logistic_model_application_and_creditdata_7
+
+test_pred = predict(logistic_model_application_and_creditdata_unbalanced, type = "response", 
+                    newdata = test_data)
+
+
+summary(test_pred)
+cutOff <- findOptimalCutOff(test_pred, .01,.17)
+# Optimal Cutoff =  0.049
+
+logistic_model_application_and_creditdata_unbalanced_metrics <- evaluateClassificationModel(test_pred,
+                            test_actual_default, 
+                            cutOff)
+rownames(logistic_model_application_and_creditdata_unbalanced_metrics) <- "FullData        - GLM - Unbalanced"
+model_Metrics <- rbind(model_Metrics, logistic_model_application_and_creditdata_unbalanced_metrics)
+# Optimal Cutoff =  0.049
+
+# Accuracy    : 0.6334
+# Sensitivity : 0.61721
+# Specificity : 0.63407
+#
+# F           : 0.04046375
+#
+# Area under the curve (AUC): 0.6256443
+```
+
+## Cross Validation & Sampling with Demographic and Credit Bureau Data
+
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+## Logistic Regression - Using Under Sampling
+t8 <- Sys.time()
+model_glm_fullCustomerData_undersampling <- caret::train(Performance ~  
+                                Income_imputed + 
+                                No.of.months.in.current.company +
+                                No.of.months.in.current.residence +
+                                Avgas.CC.Utilization.in.last.12.months_WoE +
+                                Avgas.CC.Utilization.in.last.12.months_imputed +
+                                Outstanding.Balance_WoE +
+                                Outstanding.Balance_imputed +
+                                No.of.times.30.DPD.or.worse.in.last.6.months +
+                                No.of.trades.opened.in.last.12.months,
+                 data = train_data [, -1],
+                 method = "glm",
+                 family="binomial",
+                 preProcess = c("scale", "center"),
+                 tuneLength = 5,
+                 trControl = trainControl(method = "cv", 
+                                          number = 5, 
+                                          verboseIter = TRUE,
+                                          sampling = "down"))
+
+test_pred_fullCustomerData_glm_undersampling <- predict(model_glm_fullCustomerData_undersampling, 
+                type = "prob",
+                newdata = test_data)
+t9 <- Sys.time()
+
+t9-t8
+# Time difference of 2.016878 secs
+
+summary(test_pred_fullCustomerData_glm_undersampling[,2])
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.2164  0.2935  0.4670  0.4590  0.6035  0.8538 
+cutOff <- findOptimalCutOff(test_pred_fullCustomerData_glm_undersampling[,2], 0.20, 0.85)
+# Optimal Cutoff =  0.541
+
+model_glm_fullCustomerData_undersampling_metrics <- evaluateClassificationModel(test_pred_fullCustomerData_glm_undersampling[,2],
+                            test_actual_default, 
+                            cutOff)
+rownames(model_glm_fullCustomerData_undersampling_metrics) <- "FullData        - GLM - Under-Sampling"
+model_Metrics <- rbind(model_Metrics, model_glm_fullCustomerData_undersampling_metrics)
+
+# Accuracy    : 0.6345
+# Sensitivity : 0.62288
+# Specificity : 0.06988
+#
+# F: 0.04046375
+#
+# Area under the curve (AUC): 0.6289243
+
+# -------------------------------- Logistic Regression - Using Over Sampling
+
+t8 <- Sys.time()
+model_glm_fullCustomerData_oversampling <- caret::train(Performance ~  
+                    Income_imputed + 
+                    No.of.months.in.current.company +
+                    No.of.months.in.current.residence +
+                    Avgas.CC.Utilization.in.last.12.months_WoE +
+                    Avgas.CC.Utilization.in.last.12.months_imputed +
+                    Outstanding.Balance_WoE +
+                    Outstanding.Balance_imputed +
+                    No.of.times.30.DPD.or.worse.in.last.6.months +
+                    No.of.trades.opened.in.last.12.months,
+                  data = train_data [, -1],
+                  method = "glm",
+                  family="binomial",
+                  preProcess = c("scale", "center"),
+                  tuneLength = 5,
+                  trControl = trainControl(method = "cv", 
+                                           number = 5, 
+                                           verboseIter = TRUE,
+                                           sampling = "up"))
+
+
+test_pred_fullCustomerData_glm_oversampling <- predict(model_glm_fullCustomerData_oversampling, 
+                 type = "prob",
+                 newdata = test_data)
+t9 <- Sys.time()
+
+t9-t8
+# Time difference of 7.105892 secs
+
+summary(test_pred_fullCustomerData_glm_oversampling[,2])
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.2224  0.3040  0.4597  0.4587  0.5897  0.8765  
+cutOff <- findOptimalCutOff(test_pred_fullCustomerData_glm_oversampling[,2], 0.2, 0.87)
+# Optimal Cutoff =  0.532
+
+model_glm_fullCustomerData_oversampling_metrics <- evaluateClassificationModel(test_pred_fullCustomerData_glm_oversampling[,2],
+                            test_actual_default, 
+                            cutOff)
+rownames(model_glm_fullCustomerData_oversampling_metrics) <- "FullData        - GLM - Over-Sampling"
+model_Metrics <- rbind(model_Metrics, model_glm_fullCustomerData_oversampling_metrics)
+
+# Accuracy    : 0.6264865
+# Sensitivity : 0.6375991
+# Specificity : 0.6259972
+#
+# F: 0.04046375
+#
+# Area under the curve (AUC): 0.6317982
+#
+# -------------------------------- Logistic Regression - Using SMOTE
+t8 <- Sys.time()
+model_glm_fullCustomerData_smote <- caret::train(Performance ~  
+                   Income_imputed + 
+                   No.of.months.in.current.company +
+                   No.of.months.in.current.residence +
+                   Avgas.CC.Utilization.in.last.12.months_WoE +
+                   Avgas.CC.Utilization.in.last.12.months_imputed +
+                   Outstanding.Balance_WoE +
+                   Outstanding.Balance_imputed +
+                   No.of.times.30.DPD.or.worse.in.last.6.months +
+                   No.of.trades.opened.in.last.12.months,
+                 data = train_data [, -1],
+                 method = "glm",
+                 family="binomial",
+                 preProcess = c("scale", "center"),
+                 tuneLength = 5,
+                 trControl = trainControl(method = "cv", 
+                                          number = 5, 
+                                          verboseIter = TRUE,
+                                          sampling = "smote"))
+
+test_pred_fullCustomerData_glm_smote <- predict(model_glm_fullCustomerData_smote, 
+                type = "prob",
+                newdata = test_data)
+t9 <- Sys.time()
+
+t9-t8
+# Time difference of 10.60025 secs
+
+summary(test_pred_fullCustomerData_glm_smote[,2])
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.1617  0.2449  0.3912  0.3948  0.5260  0.8312  
+cutOff <- findOptimalCutOff(test_pred_fullCustomerData_glm_smote[,2], 0.16, 0.83)
+# Optimal Cutoff =  0.458
+
+model_glm_fullCustomerData_smotesampling_metrics <- evaluateClassificationModel(test_pred_fullCustomerData_glm_smote[,2],
+                            test_actual_default, 
+                            cutOff)
+rownames(model_glm_fullCustomerData_smotesampling_metrics) <- "FullData        - GLM - SMOTE-Sampling"
+model_Metrics <- rbind(model_Metrics, model_glm_fullCustomerData_smotesampling_metrics)
+
+# Accuracy    : 0.6270118
+# Sensitivity : 0.6398641
+# Specificity : 0.626446
+#
+# F: 0.04046375
+#
+# Area under the curve (AUC): 0.6326885
+
+# -------------------------------- Decision Tree - Using Under-Sampling
+#           Accuracy Sensitivity Specificity    F_score Threshold       AUC False_positive_Rate True_positive_Rate
+# Accuracy 0.05372749   0.9852775   0.0127144 0.04046375      0.05 0.5010041           0.9852775          0.9872856
+# Discarding this Under-sampling options for Decision Tree
+
+# -------------------------------- Decision Tree - Using Over-Sampling
+#           Accuracy Sensitivity Specificity    F_score Threshold       AUC False_positive_Rate True_positive_Rate
+# Accuracy 0.8581594   0.1313703   0.8901576 0.04046375      0.05 0.5107639           0.1098424          0.1313703
+# Discarding this over-sampling options for Decision Tree
+# -------------------------------- Decision Tree - Using SMOTE
+
+t8 <- Sys.time()
+model_rpart_fullCustomerData_smote <- caret::train(Performance ~  
+                          Income_imputed + 
+                          No.of.months.in.current.company +
+                          No.of.months.in.current.residence +
+                          #Avgas.CC.Utilization.in.last.12.months_WoE +
+                          Avgas.CC.Utilization.in.last.12.months_imputed +
+                          #Outstanding.Balance_WoE +
+                          Outstanding.Balance_imputed +
+                          No.of.times.30.DPD.or.worse.in.last.6.months +
+                          No.of.trades.opened.in.last.12.months,
+                   data = train_data [, -1],
+                   method = "rpart",
+                   #preProcess = c("scale", "center"),
+                   #minsplit=30, minbucket = 15, cp=0.0001,
+                   tuneLength = 5,
+                   trControl = trainControl(method = "cv", 
+                                            number = 5, 
+                                            verboseIter = TRUE,
+                                            sampling = "smote"))
+# Fitting cp = 0.000388 on full training set
+t9 <- Sys.time()
+t9-t8
+# Time difference of 16.57429 secs
+
+# # plot(model_rpart_fullCustomerData_smote)
+# # prp(model_rpart_fullCustomerData_smote, box.palette = "Reds", tweak = 1.2)
+# library(rpart.plot)
+# rpart.plot(model_rpart_fullCustomerData_smote$finalModel)
+
+test_pred_fullCustomerData_rpart_smote <- predict(model_rpart_fullCustomerData_smote, 
+                  type = "prob",
+                  newdata = test_data)
+
+summary(test_pred_fullCustomerData_rpart_smote[,2])
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.0000  0.1083  0.1765  0.2533  0.2500  1.0000   
+cutOff <- findOptimalCutOff(test_pred_fullCustomerData_rpart_smote[,2], 0.1, 0.25)
+# Optimal Cutoff =  0.206
+
+model_rpart_fullCustomerData_smotesampling_metrics <- evaluateClassificationModel(test_pred_fullCustomerData_rpart_smote[,2],
+                            test_actual_default, 
+                            cutOff)
+
+rownames(model_rpart_fullCustomerData_smotesampling_metrics) <- "FullData        - RPART - SMOTE-Sampling"
+model_Metrics <- rbind(model_Metrics, model_rpart_fullCustomerData_smotesampling_metrics)
+
+# Accuracy    : 0.6015569
+# Sensitivity : 0.599094
+# Specificity : 0.6016653
+#
+# F: 0.04046375
+#
+# Area under the curve (AUC): 0.6003797
+
+# -------------------------------- Random Forest - Using Under-Sampling
+# Remove code snippet related to this model
+#           Accuracy Sensitivity Specificity    F_score Threshold       AUC False_positive_Rate True_positive_Rate
+# Accuracy 0.6067147   0.6070215   0.6067012 0.04046375     0.522 0.6068614           0.3932988          0.6070215
+# Discarding this Under-sampling options for RF
+
+# -------------------------------- Random Forest - Using Over-Sampling
+# Remove code snippet related to this model
+#           Accuracy Sensitivity Specificity    F_score Threshold       AUC False_positive_Rate True_positive_Rate
+# Accuracy 0.5677444   0.5934315   0.5666135 0.04046375      0.05 0.5800225           0.4333865          0.5934315
+# Also takes 50+ mins to build model. So, discarding RF Over-Sampling option
+# Discarding this Over-sampling options for RF
+
+# -------------------------------- Random Forest - Using SMOTE
+t12 <- Sys.time()
+model_rf_fullCustomerData_DemographicData_smote <- caret::train(Performance ~ 
+                           Income_imputed + 
+                           No.of.months.in.current.company +
+                           No.of.months.in.current.residence +
+                           Avgas.CC.Utilization.in.last.12.months_WoE +
+                           Avgas.CC.Utilization.in.last.12.months_imputed +
+                           Outstanding.Balance_WoE +
+                           Outstanding.Balance_imputed +
+                           No.of.times.30.DPD.or.worse.in.last.6.months +
+                           No.of.trades.opened.in.last.12.months,
+                        data = train_data [, -1],
+                        method = "rf",
+                        ntree = 1000,
+                        preProcess = c("scale", "center"),
+                        trControl = trainControl(method = "cv", 
+          number = 5, 
+          verboseIter = TRUE,
+          sampling = "smote"))
+t13 <- Sys.time()
+t13-t12
+# Time difference of 4.712344 mins
+test_pred_fullCustomerData_rf_smote <- predict(model_rf_fullCustomerData_DemographicData_smote, 
+       type = "prob",
+       newdata = test_data)
+
+summary(test_pred_fullCustomerData_rf_smote[,2])
+# Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+# 0.0010  0.0980  0.2240  0.2435  0.3650  0.8620 
+cutOff <- findOptimalCutOff(test_pred_fullCustomerData_rf_smote[,2], .001,.86)
+# Optimal Cutoff =  0.279
+
+model_rf_fullCustomerData_smotesampling_metrics <- evaluateClassificationModel(test_pred_fullCustomerData_rf_smote[,2],
+                                         test_actual_default, 
+                                         cutOff)
+rownames(model_rf_fullCustomerData_smotesampling_metrics) <- "FullData        - RF - SMOTE-Sampling"
+model_Metrics <- rbind(model_Metrics, model_rf_fullCustomerData_smotesampling_metrics)
+
+plot(varImp(object=model_rf_fullCustomerData_DemographicData_smote),main="Random Forest (SMOTE) - Variable Importance")
+
+# Accuracy    : 0.6212
+# Sensitivity : 0.62288
+# Specificity : 0.62111
+#
+# F: 0.040
+#
+# Area under the curve (AUC): 0.622
+
+
+```
+
+## Evaluation of Models for Final Model Selection
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+# Evaluate various metrics across vall models built
+# Evaluating based on AUC, F-Score, Sensitivity, Specificity and Accuracy
+View(model_Metrics)
+
+# Analyse Lift, Gain and KS-Statistic metrics
+model_Metrics$KSStatistic [1] <- GainLiftChart_KSStatistic(logistic_model_demographic_data_unbalanced, test_data,  "response")
+model_Metrics$Lift [1] <- 1.1
+model_Metrics$Gain [1] <- 59.91
+
+model_Metrics$KSStatistic [2] <- GainLiftChart_KSStatistic(logistic_model_application_and_creditdata_unbalanced, test_data,  "response")
+model_Metrics$Lift [2] <- 1.49
+model_Metrics$Gain [2] <- 74.97
+
+model_Metrics$KSStatistic [3] <- GainLiftChart_KSStatistic(model_glm_fullCustomerData_undersampling, test_data,  "raw")
+model_Metrics$Lift [3] <- 1.43
+model_Metrics$Gain [3] <- 71.80
+
+model_Metrics$KSStatistic [4] <- GainLiftChart_KSStatistic(model_glm_fullCustomerData_oversampling, test_data,  "raw")
+model_Metrics$Lift [4] <- 1.44
+model_Metrics$Gain [4] <- 72.23
+
+model_Metrics$KSStatistic [5] <-GainLiftChart_KSStatistic(model_glm_fullCustomerData_smote, test_data, "raw")
+model_Metrics$Lift [5] <- 1.27
+model_Metrics$Gain [5] <- 63.75
+
+model_Metrics$KSStatistic [6] <-GainLiftChart_KSStatistic(model_rpart_fullCustomerData_smote, test_data, "raw")
+model_Metrics$Lift [6] <- 1.08
+model_Metrics$Gain [6] <- 54.36
+
+model_Metrics$KSStatistic [7] <- GainLiftChart_KSStatistic(model_rf_fullCustomerData_DemographicData_smote, test_data, "raw")
+model_Metrics$Lift [7] <- 1.03
+model_Metrics$Gain [7] <- 51.64
+# KS-Statistic = 0.0643504
+0.0643504
+
+```
+
+## Final Model Selection
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+
+View(model_Metrics)
+print(model_Metrics)
+
+# Top 2 Models Selected
+# Note : 
+# -----
+#        1) Discarding Random Forest as it involves high computational resources,
+#           and also not providing any better formance
+#        2) Discarding GLM/Unbalanced with Full Data, as well because it is trained with unbalanced data
+
+# FullData        - GLM   - SMOTE-Sampling
+# FullData        - GLM   - Over-Sampling
+#
+# Discarding GLM/Unbalanced model though it has highest KS-Statistic value = 0.2666422 as it is based on Unabalanced data
+# GLM/Over-Sampling model has better KS-Statistic value = 0.2568917 than GLM/SMOTE model KS-Statistic value = 0.2153007
+
+#final_Model_For_Scorecard <- model_glm_fullCustomerData_oversampling
+#final_Model_For_Scorecard$finalModel
+
+final_Model_For_Scorecard <- logistic_model_application_and_creditdata_unbalanced
+# Generalized Linear Model 
+# 
+# 48863 samples
+# 9 predictor
+# 2 classes: '0', '1' 
+# 
+# Pre-processing: scaled (9), centered (9) 
+# Resampling: Cross-Validated (5 fold) 
+# Summary of sample sizes: 39090, 39091, 39091, 39090, 39090 
+# Addtional sampling using up-sampling prior to pre-processing
+# 
+# Resampling results:
+#   
+#   Accuracy   Kappa     
+# 0.5782698  0.04827151
+
+# Coefficients:
+#   (Intercept)                                  Income_imputed  
+# -0.00420                                        -0.01460  
+# No.of.months.in.current.company               No.of.months.in.current.residence  
+# -0.03083                                        -0.06005  
+# Avgas.CC.Utilization.in.last.12.months_WoE  Avgas.CC.Utilization.in.last.12.months_imputed  
+# -0.27858                                         0.11162  
+# Outstanding.Balance_WoE                     Outstanding.Balance_imputed  
+# -0.12984                                        -0.02812  
+# No.of.times.30.DPD.or.worse.in.last.6.months           No.of.trades.opened.in.last.12.months  
+# 0.22748                                         0.14213  
+# 
+# Degrees of Freedom: 93599 Total (i.e. Null);  93590 Residual
+# Null Deviance:	    129800 
+# Residual Deviance: 120700 	AIC: 120700
+```
+
+
+## Application Scorecard Building and Financial Benefit Analysis
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5, out.width = "100%"}
+
+App_Scorecard <- function(model,testdataset){
+  
+  m <- model
+  score_data <- testdataset
+  score_data$bad <- predict(m,type="response",newdata = score_data[,-12])
+  score_data$good <- (1- score_data$bad)
+  score_data$odds <- score_data$good/score_data$bad
+  score_data$logodds <- log(score_data$odds)
+
+  points0 = 400
+  odds0 = 10
+  pdo = 20
+  factor = pdo / log(2)
+  offset = points0 - factor * log( odds0 )
+  
+  score_data$Score <- offset + factor * score_data$logodds
+  
+  return(score_data)
+}
+
+testdata_scorecard <- App_Scorecard(final_Model_For_Scorecard,test_data)
+rejecteddata_scorecard <- App_Scorecard(final_Model_For_Scorecard,rejected_records)
+
+#Optimal Cutoff =  0.049  - for the unbalanced model
+points0 = 400
+odds0 = 10
+pdo = 20
+factor = pdo / log(2)
+offset = points0 - factor * log( odds0 )
+
+cutoff_prob_from_model = .049
+cutoff_logodd <- log((1-cutoff_prob_from_model)/cutoff_prob_from_model)
+cutoff_score <- offset + factor * cutoff_logodd
+cutoff_score
+#419.33
+
+## rejected data analysis
+nrow(rejecteddata_scorecard[(rejecteddata_scorecard$Score >= cutoff_score),])
+#55
+boxplot(rejecteddata_scorecard$Score)
+
+##  With this build we would have got 55 good customers who had been rejected.
+
+## Full data analysis
+fulldata <- customer_master_data
+fulldata_scorecard <- App_Scorecard(final_Model_For_Scorecard,fulldata)
+ggplot(fulldata_scorecard,aes(fulldata_scorecard$Score,fill=fulldata_scorecard$Performance))+ geom_histogram(binwidth = 10,colour="black")
+
+fulldata_scorecard$predict_performance <- ifelse(fulldata_scorecard$bad>=0.049,1,0)
+fulldata_scorecard$iswrong <- ifelse(fulldata_scorecard$predict_performance != fulldata_scorecard$Performance,1,0)
+
+percent_of_wrongprediction <- (sum(fulldata_scorecard$iswrong)/nrow(fulldata_scorecard)) * 100
+percent_of_wrongprediction
+
+##-------------------  expected credit loss-------------------------S
+
+#Expected loss(c1) = PD * EAD * LGD
+
+#PD = Probability of default of each customer
+
+#EAD = Exposure at default or oustanding
+
+#LGD = Loss given default.
+
+#Lets assume if recovery likelihood is 30% then LDG = 1  - 0.30 = 0.7
+
+#Total loss expected if all customers are bad
+fulldata_scorecard$expected_loss = fulldata_scorecard$bad * fulldata_scorecard$Outstanding.Balance_imputed * 0.7
+# Calculated on Full data
+# Total prospect loss =  2634047450
+# (Prob of bad * Exposure at default * Loss given default)
+# Expected loss by default customer from model 147718048
+# 
+# The loss amount of 147718048 can be straight away avoided by not giving loan to default customer prospects 
+# However, by looking into the application score card, some customers of default category can be consider at medium risk because they fall in the boundary range. 
+# This potential credit loss can be minimized by target those customer, which Credit Score falls within Good and Intermediate. 
+# The verification / acquisition cost of Bad Customer can be minimized by this Model 
+
+#Creating a dataframe for loss calculation
+potential_credit_loss <- fulldata_scorecard[, c("Performance", "bad","Outstanding.Balance_imputed")]
+
+#Subsetting for the defaulted customers
+loss_default_customer <- potential_credit_loss[(potential_credit_loss$Performance == 1),]                                             
+
+#Loss if the model is being used on the defaulted customer
+loss_default_customer$loss_model <- as.integer(loss_default_customer$bad * loss_default_customer$Outstanding.Balance_imputed * 0.7)
+
+#Calculating the total expected loss and the loss with the model.
+total_expected_loss = sum(fulldata_scorecard$expected_loss)
+total_extected_loss_default_cust <- sum(loss_default_customer$loss_model)
+
+print(total_expected_loss)
+print(total_extected_loss_default_cust)
+
+#auto rejection rate
+
+auto_rejection_rate <- sum(fulldata_scorecard$predict_performance)/nrow(fulldata_scorecard)
+auto_approval_rate = 1 - auto_rejection_rate
+auto_approval_rate
+# Auto approval rate is 62.64%
+
+# Rejected data analysis
+#Number of good customers that is being rejected
+nrow(rejecteddata_scorecard[(rejecteddata_scorecard$Score >= cutoff_score),])
+#55
+
+boxplot(rejecteddata_scorecard$Score)
+# The histograms plots indicates that the number of defaulters decreases after Cut-off Score of 419
+# Even though 419 is boundary value with Good and Bad Customers, we can suggest that the boundary range of customers fall between Good and Bad. 
+
+rejecteddata_scorecard$expected_loss = rejecteddata_scorecard$bad * rejecteddata_scorecard$Outstanding.Balance_imputed * 0.7
+rejecteddata_loss <- rejecteddata_scorecard[,c("Score","bad","Outstanding.Balance_imputed")]
+rejecteddata_cutoff_score <- rejecteddata_loss[(rejecteddata_loss$Score >= 419),]
+
+loss_by_rejected_good_customer <- sum(rejecteddata_cutoff_score$Outstanding.Balance_imputed * 0.7)
+
+# Total prospect loss =  96026810
+# (Loss because of the full rejected data)
+# 
+# Loss due of Rejection of Good customers is 43876837
+# 
+# The amount of 43876837 would have been gained on using the model because it was the loss by rejection the good customers
+
+rejecteddata_expected_loss <- sum(rejecteddata_scorecard$expected_loss)
+print(rejecteddata_expected_loss)
+# 96026810
+print(loss_by_rejected_good_customer)
+# 43876837
+```
+

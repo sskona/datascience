@@ -1,0 +1,567 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Acquisition Analytics for CreditCard Customers},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{{#1}}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{{#1}}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{{#1}}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{{#1}}}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{{#1}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{{#1}}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{{#1}}}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{{#1}}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{{#1}}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{{#1}}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{{#1}}}
+\newcommand{\ImportTok}[1]{{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{{#1}}}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{{#1}}}}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{{#1}}}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{{#1}}}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{{#1}}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{{#1}}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{{#1}}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{{#1}}}}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{{#1}}}}
+\newcommand{\BuiltInTok}[1]{{#1}}
+\newcommand{\ExtensionTok}[1]{{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{{#1}}}
+\newcommand{\RegionMarkerTok}[1]{{#1}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{{#1}}}}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{{#1}}}}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{{#1}}}}
+\newcommand{\NormalTok}[1]{{#1}}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\newcommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Acquisition Analytics for CreditCard Customers}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{}
+    \preauthor{}\postauthor{}
+    \date{}
+    \predate{}\postdate{}
+  
+
+\begin{document}
+\maketitle
+
+A leading credit card provider CredX receives thousands of applicants
+every year and, experiencing increased credit loss over the last few
+years. The CEO wants to mitigate the credit risk.
+
+\subsubsection{Analytical Problem Solving Approach using CRISP-DM
+framework}\label{analytical-problem-solving-approach-using-crisp-dm-framework}
+
+\begin{verbatim}
+ 1. Business Objective(s)    
+
+  1.1 Business Understanding
+  CredX intends to mitigate their credit risk during acquisition by 'Finding The Right Customers'.
+        
+  1.2 Goals of Data Analysis
+    1.2.1. Using past data of the bank's applicants identify the most important factors affecting credit risk
+    1.2.2. Create strategies to mitigate the acquisition risk for new applications, by identifying right 
+           customers using predictive modelling to differentiate Good Vs Bad customer
+
+ 2. Data Understanding
+    3.1 Demographic Data
+        Contains customer-level information like Age, Gender, Marital Status and Salary etc.
+    3.2 Credit Bureau Data
+        This is taken from the credit bureau, contains past Avg Credit Card Utilization, Outstanding balance 
+        and 30/60/90 DPDs in last 6/12 months etc.
+
+ 3. Data Preparation
+    3.1 Data Cleaning
+    3.2 Data Imputation
+    3.3 Feature Engineering
+        3.3.1 Derived Variables
+        3.3.1 Encoding / Dummy variables
+        3.3.1 Weight-of-Evidence (WoE)/Information Value (IV) computation
+
+ 4. Exploratory Data Analysis
+    4.1 Univariate Analysis
+    4.2 Bi-variate 
+    4.3 Multi-variate Analysis
+
+ 5. Feature selection
+    We will use Use Weight-of-Evidence(WoE) /Information Value(IV) for feature selection
+
+ 4. Modeling Building       
+       This is a binary classification problem with highly unbalanced data. We will apply following combination
+    of model types, sampling techniques & cross-validation
+
+    4.1 Demographic Data                 - Unbalanced Data  - Logistic Regression 
+    4.2 Demographic & Credit Bureau Data - Unbalanced Data  - Logistic Regression
+    4.3 Demographic & Credit Bureau Data - Under Sampling   - Logistic Regression - with Cross Validation
+    4.4 Demographic & Credit Bureau Data - Over  Sampling   - Logistic Regression - with Cross Validation 
+    4.5 Demographic & Credit Bureau Data - SMOTE Sampling   - Logistic Regression - with Cross Validation
+    4.6 Demographic & Credit Bureau Data - SMOTE Sampling   - Decision Trees      - with Cross Validation
+    4.7 Demographic & Credit Bureau Data - SMOTE Sampling   - Random Forest       - with Cross Validation
+
+ 5. Models Evaluation using Metrics & Final Model Selection                                                                                                                                                                   
+    5.1 Accuracy, Sensitivity & Specificity
+    5.2 F-Score (F1)
+    5.3 Area Under Curve (AUC)
+    5.4 KSStatistic
+    5.5 ROC Curve
+    5.6 Vintage Curve
+
+ 6. Model Deployment                                                                                                                                                                            
+ 7. Application scorecard Building                                                                                                                                                              
+ 8. Calculate scores on Rejected Population Data                                                                                                                                                                   
+ 9. Financial Benefit Analysis                                                                                                                                                                     
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{##### Loading libraries}
+\KeywordTok{library}\NormalTok{(ggplot2)}
+\KeywordTok{library}\NormalTok{(dplyr)}
+\KeywordTok{library}\NormalTok{(outliers)}
+\KeywordTok{library}\NormalTok{(corrplot)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'corrplot' was built under R version 3.4.2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(MASS)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'MASS' was built under R version 3.4.2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(caret)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'caret' was built under R version 3.4.3
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(ROSE)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'ROSE' was built under R version 3.4.4
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(car)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'car' was built under R version 3.4.2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(reshape2)}
+\KeywordTok{library}\NormalTok{(scales)}
+\KeywordTok{library}\NormalTok{(tidyr)}
+\KeywordTok{library}\NormalTok{(ROCR)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: package 'ROCR' was built under R version 3.4.2
+\end{verbatim}
+
+\begin{verbatim}
+## Warning: package 'gplots' was built under R version 3.4.2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{library}\NormalTok{(tibble)}
+
+\NormalTok{##### Common Functions}
+\CommentTok{# For calculating Mode value of Categorical variables}
+\NormalTok{ModeFunc <-}\StringTok{ }\NormalTok{function(x) \{}
+  \NormalTok{ux <-}\StringTok{ }\KeywordTok{unique}\NormalTok{(x)}
+  \NormalTok{ux[}\KeywordTok{which.max}\NormalTok{(}\KeywordTok{tabulate}\NormalTok{(}\KeywordTok{match}\NormalTok{(x, ux)))]}
+\NormalTok{\}}
+
+\CommentTok{# Function to determine the outliers in a measure}
+\NormalTok{checkForOutliersDetection <-}\StringTok{ }\NormalTok{function(dt, var) \{}
+  \NormalTok{var_name <-}\StringTok{ }\KeywordTok{eval}\NormalTok{(}\KeywordTok{substitute}\NormalTok{(var),}\KeywordTok{eval}\NormalTok{(dt))}
+  \NormalTok{na1 <-}\StringTok{ }\KeywordTok{sum}\NormalTok{(}\KeywordTok{is.na}\NormalTok{(var_name))}
+  \NormalTok{m1 <-}\StringTok{ }\KeywordTok{mean}\NormalTok{(var_name, }\DataTypeTok{na.rm =} \NormalTok{T)}
+  \NormalTok{outlier <-}\StringTok{ }\KeywordTok{boxplot.stats}\NormalTok{(var_name)$out}
+  \NormalTok{mo <-}\StringTok{ }\KeywordTok{mean}\NormalTok{(outlier)}
+  \NormalTok{var_name <-}\StringTok{ }\KeywordTok{ifelse}\NormalTok{(var_name %in%}\StringTok{ }\NormalTok{outlier, }\OtherTok{NA}\NormalTok{, var_name)}
+  \NormalTok{na2 <-}\StringTok{ }\KeywordTok{sum}\NormalTok{(}\KeywordTok{is.na}\NormalTok{(var_name))}
+  \KeywordTok{cat}\NormalTok{(}\StringTok{"Outliers identified:"}\NormalTok{, na2 -}\StringTok{ }\NormalTok{na1, }\StringTok{"n"}\NormalTok{)}
+\NormalTok{\}}
+
+\CommentTok{# For plotting correlation matrix}
+\NormalTok{plot_correlationMatrix <-}\StringTok{ }\NormalTok{function (data, features) \{}
+  
+  \NormalTok{melted_cor_matrix <-}\StringTok{ }\KeywordTok{melt}\NormalTok{(}\KeywordTok{round}\NormalTok{(}\KeywordTok{cor}\NormalTok{(data [ }\KeywordTok{names}\NormalTok{(data) }
+                                             \NormalTok{%in%}\StringTok{ }
+\StringTok{                                               }\NormalTok{features],}
+                                      \DataTypeTok{use=}\StringTok{"complete.obs"}\NormalTok{),}\DecValTok{2}\NormalTok{))}
+  
+  \KeywordTok{ggplot}\NormalTok{(}\DataTypeTok{data =} \NormalTok{melted_cor_matrix, }\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x=}\NormalTok{Var1, }\DataTypeTok{y=}\NormalTok{Var2, }\DataTypeTok{fill=}\NormalTok{value, }\DataTypeTok{label=}\NormalTok{value)) +}\StringTok{  }
+\StringTok{    }\KeywordTok{geom_tile}\NormalTok{()    +}\StringTok{ }
+\StringTok{    }\KeywordTok{geom_text}\NormalTok{()  +}\StringTok{ }
+\StringTok{    }\KeywordTok{xlab}\NormalTok{(}\StringTok{''}\NormalTok{)   +}\StringTok{ }
+\StringTok{    }\KeywordTok{ylab}\NormalTok{(}\StringTok{''}\NormalTok{) +}\StringTok{ }
+\StringTok{    }\KeywordTok{theme_minimal}\NormalTok{() +}\StringTok{ }
+\StringTok{    }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{axis.text.x =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{size=}\DecValTok{10}\NormalTok{, }
+                                     \DataTypeTok{hjust=}\NormalTok{-}\FloatTok{0.08}\NormalTok{, }
+                                     \DataTypeTok{angle=} \NormalTok{-}\DecValTok{35} \NormalTok{))}
+\NormalTok{\}}
+
+\NormalTok{##### Loading Data}
+
+\NormalTok{##### Loading Demographic Data}
+\NormalTok{demographic_data.original <-}\KeywordTok{read.csv}\NormalTok{(}\StringTok{"Demographic data.csv"}\NormalTok{,}
+                            \DataTypeTok{header =} \OtherTok{TRUE}\NormalTok{,}
+                            \DataTypeTok{stringsAsFactors =} \OtherTok{FALSE}\NormalTok{)}
+
+\NormalTok{##### Loading Credit Bureau Data}
+\NormalTok{creditbureau_data.original <-}\StringTok{ }\KeywordTok{read.csv}\NormalTok{(}\StringTok{"Credit Bureau data.csv"}\NormalTok{,}
+                        \DataTypeTok{header =} \OtherTok{TRUE}\NormalTok{,}
+                        \DataTypeTok{stringsAsFactors =} \OtherTok{FALSE}\NormalTok{)}
+
+\NormalTok{#####  Data Cleaning }
+\NormalTok{#####    1. Remove Duplicate Records}
+\NormalTok{#####    2. Separate Rejected Applications from Data Analysis & Model Building}
+\NormalTok{#####    3. Remove Invalid / Incorrect Values Records}
+\NormalTok{#####    4. Missing Values Treatment }
+\NormalTok{#####    5. Outlier Treatment}
+
+\NormalTok{#####  checking for Total row count}
+\KeywordTok{nrow}\NormalTok{(demographic_data.original)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 71295
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{##### 71295}
+
+\KeywordTok{nrow}\NormalTok{(creditbureau_data.original)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 71295
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{##### 71295}
+
+\NormalTok{#####  Checking for Duplicate records }
+\KeywordTok{length}\NormalTok{(}\KeywordTok{unique}\NormalTok{(demographic_data.original$Application.ID))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 71292
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{##### 71292 - 3 Duplicate records exist}
+
+\KeywordTok{length}\NormalTok{(}\KeywordTok{unique}\NormalTok{(creditbureau_data.original$Application.ID))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 71292
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{##### 71292 - 3 Duplicate records exist}
+
+\NormalTok{#####  Remove duplicate records}
+\NormalTok{demographic_data <-}\StringTok{ }\NormalTok{demographic_data.original[!}\KeywordTok{duplicated}\NormalTok{(demographic_data.original$Application.ID),]}
+\NormalTok{creditbureau_data <-}\StringTok{ }\NormalTok{creditbureau_data.original[!}\KeywordTok{duplicated}\NormalTok{(creditbureau_data.original$Application.ID),]}
+
+\KeywordTok{summary}\NormalTok{(demographic_data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  Application.ID           Age           Gender         
+##  Min.   :1.004e+05   Min.   :-3.00   Length:71292      
+##  1st Qu.:2.484e+08   1st Qu.:37.00   Class :character  
+##  Median :4.976e+08   Median :45.00   Mode  :character  
+##  Mean   :4.990e+08   Mean   :44.94                     
+##  3rd Qu.:7.496e+08   3rd Qu.:53.00                     
+##  Max.   :1.000e+09   Max.   :65.00                     
+##                                                        
+##  Marital.Status..at.the.time.of.application. No.of.dependents
+##  Length:71292                                Min.   :1.000   
+##  Class :character                            1st Qu.:2.000   
+##  Mode  :character                            Median :3.000   
+##                                              Mean   :2.865   
+##                                              3rd Qu.:4.000   
+##                                              Max.   :5.000   
+##                                              NA's   :3       
+##      Income      Education          Profession        Type.of.residence 
+##  Min.   :-0.5   Length:71292       Length:71292       Length:71292      
+##  1st Qu.:14.0   Class :character   Class :character   Class :character  
+##  Median :27.0   Mode  :character   Mode  :character   Mode  :character  
+##  Mean   :27.2                                                           
+##  3rd Qu.:40.0                                                           
+##  Max.   :60.0                                                           
+##                                                                         
+##  No.of.months.in.current.residence No.of.months.in.current.company
+##  Min.   :  6.00                    Min.   :  3.00                 
+##  1st Qu.:  6.00                    1st Qu.: 16.00                 
+##  Median : 11.00                    Median : 34.00                 
+##  Mean   : 34.56                    Mean   : 33.96                 
+##  3rd Qu.: 60.00                    3rd Qu.: 51.00                 
+##  Max.   :126.00                    Max.   :133.00                 
+##                                                                   
+##  Performance.Tag 
+##  Min.   :0.0000  
+##  1st Qu.:0.0000  
+##  Median :0.0000  
+##  Mean   :0.0422  
+##  3rd Qu.:0.0000  
+##  Max.   :1.0000  
+##  NA's   :1425
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{summary}\NormalTok{(creditbureau_data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  Application.ID      No.of.times.90.DPD.or.worse.in.last.6.months
+##  Min.   :1.004e+05   Min.   :0.0000                              
+##  1st Qu.:2.484e+08   1st Qu.:0.0000                              
+##  Median :4.976e+08   Median :0.0000                              
+##  Mean   :4.990e+08   Mean   :0.2703                              
+##  3rd Qu.:7.496e+08   3rd Qu.:0.0000                              
+##  Max.   :1.000e+09   Max.   :3.0000                              
+##                                                                  
+##  No.of.times.60.DPD.or.worse.in.last.6.months
+##  Min.   :0.0000                              
+##  1st Qu.:0.0000                              
+##  Median :0.0000                              
+##  Mean   :0.4305                              
+##  3rd Qu.:1.0000                              
+##  Max.   :5.0000                              
+##                                              
+##  No.of.times.30.DPD.or.worse.in.last.6.months
+##  Min.   :0.0000                              
+##  1st Qu.:0.0000                              
+##  Median :0.0000                              
+##  Mean   :0.5772                              
+##  3rd Qu.:1.0000                              
+##  Max.   :7.0000                              
+##                                              
+##  No.of.times.90.DPD.or.worse.in.last.12.months
+##  Min.   :0.0000                               
+##  1st Qu.:0.0000                               
+##  Median :0.0000                               
+##  Mean   :0.4503                               
+##  3rd Qu.:1.0000                               
+##  Max.   :5.0000                               
+##                                               
+##  No.of.times.60.DPD.or.worse.in.last.12.months
+##  Min.   :0.0000                               
+##  1st Qu.:0.0000                               
+##  Median :0.0000                               
+##  Mean   :0.6555                               
+##  3rd Qu.:1.0000                               
+##  Max.   :7.0000                               
+##                                               
+##  No.of.times.30.DPD.or.worse.in.last.12.months
+##  Min.   :0.0000                               
+##  1st Qu.:0.0000                               
+##  Median :0.0000                               
+##  Mean   :0.8009                               
+##  3rd Qu.:1.0000                               
+##  Max.   :9.0000                               
+##                                               
+##  Avgas.CC.Utilization.in.last.12.months
+##  Min.   :  0.0                         
+##  1st Qu.:  8.0                         
+##  Median : 15.0                         
+##  Mean   : 29.7                         
+##  3rd Qu.: 46.0                         
+##  Max.   :113.0                         
+##  NA's   :1058                          
+##  No.of.trades.opened.in.last.6.months
+##  Min.   : 0.000                      
+##  1st Qu.: 1.000                      
+##  Median : 2.000                      
+##  Mean   : 2.298                      
+##  3rd Qu.: 3.000                      
+##  Max.   :12.000                      
+##  NA's   :1                           
+##  No.of.trades.opened.in.last.12.months
+##  Min.   : 0.000                       
+##  1st Qu.: 2.000                       
+##  Median : 5.000                       
+##  Mean   : 5.827                       
+##  3rd Qu.: 9.000                       
+##  Max.   :28.000                       
+##                                       
+##  No.of.PL.trades.opened.in.last.6.months
+##  Min.   :0.000                          
+##  1st Qu.:0.000                          
+##  Median :1.000                          
+##  Mean   :1.207                          
+##  3rd Qu.:2.000                          
+##  Max.   :6.000                          
+##                                         
+##  No.of.PL.trades.opened.in.last.12.months
+##  Min.   : 0.000                          
+##  1st Qu.: 0.000                          
+##  Median : 2.000                          
+##  Mean   : 2.397                          
+##  3rd Qu.: 4.000                          
+##  Max.   :12.000                          
+##                                          
+##  No.of.Inquiries.in.last.6.months..excluding.home...auto.loans.
+##  Min.   : 0.000                                                
+##  1st Qu.: 0.000                                                
+##  Median : 1.000                                                
+##  Mean   : 1.764                                                
+##  3rd Qu.: 3.000                                                
+##  Max.   :10.000                                                
+##                                                                
+##  No.of.Inquiries.in.last.12.months..excluding.home...auto.loans.
+##  Min.   : 0.000                                                 
+##  1st Qu.: 0.000                                                 
+##  Median : 3.000                                                 
+##  Mean   : 3.535                                                 
+##  3rd Qu.: 5.000                                                 
+##  Max.   :20.000                                                 
+##                                                                 
+##  Presence.of.open.home.loan Outstanding.Balance Total.No.of.Trades
+##  Min.   :0.0000             Min.   :      0     Min.   : 0.000    
+##  1st Qu.:0.0000             1st Qu.: 211537     1st Qu.: 3.000    
+##  Median :0.0000             Median : 774994     Median : 6.000    
+##  Mean   :0.2564             Mean   :1249195     Mean   : 8.187    
+##  3rd Qu.:1.0000             3rd Qu.:2920797     3rd Qu.:10.000    
+##  Max.   :1.0000             Max.   :5218801     Max.   :44.000    
+##  NA's   :272                NA's   :272                           
+##  Presence.of.open.auto.loan Performance.Tag 
+##  Min.   :0.00000            Min.   :0.0000  
+##  1st Qu.:0.00000            1st Qu.:0.0000  
+##  Median :0.00000            Median :0.0000  
+##  Mean   :0.08462            Mean   :0.0422  
+##  3rd Qu.:0.00000            3rd Qu.:0.0000  
+##  Max.   :1.00000            Max.   :1.0000  
+##                             NA's   :1425
+\end{verbatim}
+
+\subsection{Including Plots}\label{including-plots}
+
+You can also embed plots, for example:
+
+\includegraphics{BFS12_CapstoneSubmission_files/figure-latex/pressure-1.pdf}
+
+Note that the \texttt{echo\ =\ FALSE} parameter was added to the code
+chunk to prevent printing of the R code that generated the plot.
+
+
+\end{document}
