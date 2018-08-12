@@ -1,0 +1,103 @@
+Data Cleaning
+
+	- Outliter treatment 
+		(will do in the end after this flow, by removing extreme outliers. 
+			This also helps making x-axis without 2e+0.1 kind of values)
+	
+	- Funded Amount
+	- Annaul Income
+	- Credit Loss (?)
+	
+Derived Metrics
+
+	- Credit Loss (Should be much before in derived metrics)
+		funded_amnt - total_rec_prncp
+	
+Correlation Matrix of Various Metrics	
+
+	- Correlation Matrix
+
+Univariate Analysis - Using Counts only
+
+	- Funded Amount (Histogram & Box Plot)
+	- Credit Loss (Histogram & Box Plot)
+	- Loan Status (Histogram for 3 groups)
+	- US States (Map Visualization & Top 5 States with Bar Charts)
+	- Date/Year wise (Line)
+	- Annual Income (?)
+
+Segmented Variate Analysis with 'Loan Status' - Using Counts Only
+
+	- Purpose
+		- Debit Consolidation has highest Defaults
+		- Small Business & Credit card come next
+	- Home Ownership
+		- RENT & MORTAGAGE are Highest with 92% (approx)
+	- Term
+		- 60 Months has highest 
+	- Interest Rate
+
+	- Employment Length
+
+	- Annul Income
+	- DTI 
+	- Grade
+
+- Now Analysis of Defaulted Records Only Filter (Loan_Status = 'Chargedoff')
+- Let's start PPT preparation after this Step
+
+Bi-Variate Analysis
+
+	- Interest Rate vs Credit Loss (Scatter Plot continuos variable & Bar Chart using decrete BINs)
+		- Infer >17% has highest
+		- 11-14 & 14-17 are next highest
+	- Funding Amount Vs Credit Loss (Scatter Plot continuos variable & Bar Chart using decrete BINs)
+		- Infere 20K-25K has highest credit risk
+	- Employment Length Vs Credit Loss (Bar Chart using decrete)
+		- Infer >10 has highest risk
+	- DTI Vs Credit Loss (Scatter Plot continuos variable & Bar Chart using decrete BINs)
+
+Multi-Variate Analysis
+
+	Fixed Filters - Home Ownership (RENT & MORTAGAGE)
+	
+	Purpose: Debt Consolidation, Small Business, Credit Cards
+
+	Analyse following for 'Purpose' acorss 'Term'
+	
+		- Intrest Rates
+		- Funding Amount
+		- Annul Income
+			
+Obervations and Driving Factors
+
+	  Basic:
+		- Purpose - Debt Consolidation
+				  - % 57% Credit Loss Overall
+		- Home Ownership (RENT & MORTAGAGE)
+				- 92%
+				
+				
+		- 60 Months Term
+				- 26% for overall credit loss
+				- 30% for Desbt Consolidation
+
+		- Interest Rate >17% 
+				- 30% for overall
+				- 34% for Debt Consolidation
+		- Interest Rate 11-14, 14-17
+				- 54% for over all
+				- 51% for Debt Consolidation
+		
+		- 20K-25K Funding Amount
+				- 40% for overall credit loss
+				- 46% for Debt Consolidation
+
+Final Suggestions
+
+		- For Interest Rate 11-17%
+				- No 20K-25K Funding Amount 
+				- No 60 Months ?
+		
+		- For Interest Rate > 17%
+				- No 60 Months ?
