@@ -31,6 +31,6 @@ Investigated 38000+ loan records of both default/non-default and reported 7 most
 
 Uber Car Supply Demand Gap Analysis - Investigated cab request and cancellation records and tracked 2 most critical time slots for supply demand gap lead to 58% business loss
 
-### Fund Investments Analysis 
+### Fund Investments Analysis - Problem Solving using CRISP DM
 
 Investigated past funds data across sectors and countries and identified Top 3 Companies in Top 3 best sectors of Top 3 English speaking countries for investment amount of 5-15 million USD per round.
